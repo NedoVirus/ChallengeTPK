@@ -4,6 +4,10 @@ const API_URL =
 
 let callbackCounter = 0;
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * GET-запрос к Google Apps Script через JSONP.
  */
@@ -16,6 +20,7 @@ export function getGasJsonp(action, params = {}) {
 
     url.searchParams.set('action', action);
     url.searchParams.set('callback', callbackName);
+    url.searchParams.set('_ts', String(Date.now()));
 
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
@@ -39,12 +44,16 @@ export function getGasJsonp(action, params = {}) {
 
     script.onerror = () => {
       cleanup();
-      reject(new Error('Не удалось подключиться к Google Apps Script'));
+      reject(
+        new Error('Не удалось подключиться к Google Apps Script')
+      );
     };
 
     timeout = setTimeout(() => {
       cleanup();
-      reject(new Error('Превышено время ожидания ответа сервера'));
+      reject(
+        new Error('Превышено время ожидания ответа Google Apps Script')
+      );
     }, 15000);
 
     script.async = true;
@@ -55,151 +64,106 @@ export function getGasJsonp(action, params = {}) {
 }
 
 /**
- * Отправка POST через скрытый iframe.
+ * POST-запрос без чтения ответа из-за CORS.
  *
- * После завершения запроса не используем postMessage
- * из HtmlService, а проверяем фактическую запись в Sheets.
+ * После отправки проверяем фактическую запись
+ * пользователя в Google Таблице через JSONP.
  */
-export function postGasForm(payload) {
-  return new Promise((resolve, reject) => {
-    const frame = document.createElement('iframe');
-    const form = document.createElement('form');
+export async function postGasForm(payload) {
+  const userId = String(payload.vk_user_id || '');
 
-    const frameName =
-      `stepChallengeFrame${Date.now()}${++callbackCounter}`;
+  if (!/^\d+$/.test(userId)) {
+    throw new Error('Некорректный VK ID пользователя');
+  }
 
-    frame.name = frameName;
-    frame.title = 'STEP CHALLENGE API';
+  if (payload.action !== 'register') {
+    throw new Error('Неизвестная операция регистрации');
+  }
 
-    frame.style.position = 'absolute';
-    frame.style.width = '1px';
-    frame.style.height = '1px';
-    frame.style.opacity = '0';
-    frame.style.pointerEvents = 'none';
-    frame.style.left = '-9999px';
+  const body = new URLSearchParams();
 
-    form.method = 'POST';
-    form.action = API_URL;
-    form.target = frameName;
-    form.style.display = 'none';
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      body.append(key, String(value));
+    }
+  });
 
-    Object.entries(payload).forEach(([key, value]) => {
-      if (value === undefined || value === null) {
-        return;
-      }
+  const controller = new AbortController();
 
-      const input = document.createElement('input');
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 30000);
 
-      input.type = 'hidden';
-      input.name = key;
-      input.value = String(value);
-
-      form.appendChild(input);
+  try {
+    // Отправляем POST. Ответ намеренно непрозрачный,
+    // поэтому response.ok и response.status не проверяем.
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      redirect: 'follow',
+      credentials: 'omit',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: body.toString(),
+      signal: controller.signal,
     });
-
-    let timeout;
-    let loadCount = 0;
-    let finished = false;
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      frame.removeEventListener('load', handleFrameLoad);
-      frame.remove();
-      form.remove();
-    };
-
-    const fail = (error) => {
-      if (finished) return;
-
-      finished = true;
-      cleanup();
-
-      reject(
-        error instanceof Error
-          ? error
-          : new Error(String(error))
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(
+        'Время отправки запроса истекло. Проверь выполнение doPost в Apps Script.'
       );
-    };
+    }
 
-    const verifyRegistration = async () => {
-      const userId = String(payload.vk_user_id || '');
+    throw new Error(
+      'Не удалось отправить запрос в Google Apps Script. Проверь интернет-соединение.'
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 
-      if (!/^\d+$/.test(userId)) {
-        throw new Error('Некорректный VK ID');
-      }
+  // Проверяем результат в общей Google Таблице.
+  // Apps Script может завершить запись немного позже HTTP-ответа.
+  let lastError = null;
 
-      // Проверяем, появилась ли запись в Google Таблице.
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    try {
       const participant = await getGasJsonp('participant', {
         vk_user_id: userId,
       });
 
       if (!participant?.ok) {
         throw new Error(
-          'Не удалось проверить регистрацию в Google Таблице'
+          participant?.error || 'Ошибка проверки участника'
         );
       }
 
-      if (!participant.registered) {
-        throw new Error(
-          'Google Таблица не подтвердила регистрацию. Проверь журнал Apps Script.'
-        );
+      if (participant.registered) {
+        const stats = await getGasJsonp('stats');
+
+        return {
+          ok: true,
+          status: 'registered',
+          message: 'Регистрация успешно подтверждена Google Таблицей!',
+          registeredCount: Number(stats?.registeredCount) || 0,
+          participant: participant.participant,
+        };
       }
+    } catch (error) {
+      lastError = error;
+    }
 
-      // Получаем актуальное количество участников.
-      const stats = await getGasJsonp('stats');
+    await delay(500 + attempt * 500);
+  }
 
-      return {
-        ok: true,
-        status: 'registered',
-        message: 'Регистрация успешно подтверждена Google Таблицей!',
-        registeredCount: Number(stats?.registeredCount) || 0,
-      };
-    };
+  if (lastError) {
+    throw new Error(
+      'Запрос отправлен, но проверить запись в Google Таблице не удалось: ' +
+      lastError.message
+    );
+  }
 
-    const handleFrameLoad = async () => {
-      if (finished) return;
-
-      loadCount++;
-
-      // Первое событие — загрузка about:blank.
-      // После него отправляем форму.
-      if (loadCount === 1) {
-        try {
-          form.submit();
-          form.remove();
-        } catch (error) {
-          fail(error);
-        }
-
-        return;
-      }
-
-      // Второе событие — загрузился ответ Google Apps Script.
-      finished = true;
-      cleanup();
-
-      try {
-        const result = await verifyRegistration();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    frame.addEventListener('load', handleFrameLoad);
-
-    timeout = setTimeout(() => {
-      fail(
-        new Error(
-          'Google Apps Script не завершил запрос за 60 секунд'
-        )
-      );
-    }, 60000);
-
-    // Загружаем iframe, после чего отправляем POST.
-    frame.src = 'about:blank';
-
-    document.body.appendChild(frame);
-    document.body.appendChild(form);
-  });
+  throw new Error(
+    'Google Apps Script получил запрос, но участник не появился в Google Таблице. Проверь журнал выполнений Apps Script.'
+  );
 }
