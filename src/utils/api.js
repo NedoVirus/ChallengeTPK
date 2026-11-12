@@ -1,3 +1,4 @@
+
 const API_URL =
   'https://script.google.com/macros/s/AKfycby131tLHIX7DyqQFXkBxH0tkdd3pX6Qy0EfKCTsqb4RSVRmIjTvQWv2E7PzbPu8WpDiXQ/exec';
 
@@ -54,8 +55,10 @@ export function getGasJsonp(action, params = {}) {
 }
 
 /**
- * POST-запрос через скрытый iframe.
- * Используется для регистрации без CORS-запроса.
+ * Отправка POST через скрытый iframe.
+ *
+ * После завершения запроса не используем postMessage
+ * из HtmlService, а проверяем фактическую запись в Sheets.
  */
 export function postGasForm(payload) {
   return new Promise((resolve, reject) => {
@@ -95,42 +98,108 @@ export function postGasForm(payload) {
     });
 
     let timeout;
+    let loadCount = 0;
+    let finished = false;
 
     const cleanup = () => {
       clearTimeout(timeout);
-      window.removeEventListener('message', handleMessage);
+      frame.removeEventListener('load', handleFrameLoad);
       frame.remove();
       form.remove();
     };
 
-    const handleMessage = (event) => {
-      if (event.source !== frame.contentWindow) {
-        return;
-      }
+    const fail = (error) => {
+      if (finished) return;
 
-      if (
-        !event.data ||
-        event.data.type !== 'STEP_CHALLENGE_GAS_RESPONSE'
-      ) {
-        return;
-      }
-
+      finished = true;
       cleanup();
-      resolve(event.data.data);
+
+      reject(
+        error instanceof Error
+          ? error
+          : new Error(String(error))
+      );
     };
 
-    window.addEventListener('message', handleMessage);
+    const verifyRegistration = async () => {
+      const userId = String(payload.vk_user_id || '');
+
+      if (!/^\d+$/.test(userId)) {
+        throw new Error('Некорректный VK ID');
+      }
+
+      // Проверяем, появилась ли запись в Google Таблице.
+      const participant = await getGasJsonp('participant', {
+        vk_user_id: userId,
+      });
+
+      if (!participant?.ok) {
+        throw new Error(
+          'Не удалось проверить регистрацию в Google Таблице'
+        );
+      }
+
+      if (!participant.registered) {
+        throw new Error(
+          'Google Таблица не подтвердила регистрацию. Проверь журнал Apps Script.'
+        );
+      }
+
+      // Получаем актуальное количество участников.
+      const stats = await getGasJsonp('stats');
+
+      return {
+        ok: true,
+        status: 'registered',
+        message: 'Регистрация успешно подтверждена Google Таблицей!',
+        registeredCount: Number(stats?.registeredCount) || 0,
+      };
+    };
+
+    const handleFrameLoad = async () => {
+      if (finished) return;
+
+      loadCount++;
+
+      // Первое событие — загрузка about:blank.
+      // После него отправляем форму.
+      if (loadCount === 1) {
+        try {
+          form.submit();
+          form.remove();
+        } catch (error) {
+          fail(error);
+        }
+
+        return;
+      }
+
+      // Второе событие — загрузился ответ Google Apps Script.
+      finished = true;
+      cleanup();
+
+      try {
+        const result = await verifyRegistration();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    frame.addEventListener('load', handleFrameLoad);
 
     timeout = setTimeout(() => {
-      cleanup();
-      reject(
-        new Error('Google Apps Script не вернул ответ на регистрацию')
+      fail(
+        new Error(
+          'Google Apps Script не завершил запрос за 60 секунд'
+        )
       );
-    }, 30000);
+    }, 60000);
+
+    // Загружаем iframe, после чего отправляем POST.
+    frame.src = 'about:blank';
 
     document.body.appendChild(frame);
     document.body.appendChild(form);
-
-    form.submit();
   });
 }
