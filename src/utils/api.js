@@ -1,5 +1,5 @@
 const API_URL =
-  'https://script.google.com/macros/s/AKfycby131tLHIX7DyqQFXkBxH0tkdd3pX6Qy0EfKCTsqb4RSVRmIjTvQW2E7PzbPu8WpDiXQ/exec';
+  'https://script.google.com/macros/s/AKfycby131tLHIX7DyqQFXkBxH0tkdd3pX6Qy0EfKCTsqb4RSVRmIjTvQWv2E7PzbPu8WpDiXQ/exec';
 
 let callbackCounter = 0;
 
@@ -196,9 +196,6 @@ export async function postGasForm(payload) {
 
 /**
  * Отправка ежедневного результата со скриншотом Google Fit.
- *
- * image_base64 передаётся без префикса
- * data:image/...;base64,
  */
 
 export async function submitStepsResult(payload) {
@@ -226,8 +223,6 @@ export async function submitStepsResult(payload) {
     );
   }
 
-  // Эти параметры нужны для последующей проверки статуса.
-  // Сам объект не отправляем в POST.
   const {
     signed_launch_params: signedLaunchParams,
     ...postPayload
@@ -238,10 +233,6 @@ export async function submitStepsResult(payload) {
   await sendGasForm(postPayload, 90000);
 
   let lastError = null;
-
-  // Apps Script может завершить сохранение файла
-  // и строки таблицы чуть позже.
-  // Поэтому проверяем статус несколько раз.
 
   for (let attempt = 1; attempt <= 10; attempt++) {
     try {
@@ -283,8 +274,6 @@ export async function submitStepsResult(payload) {
           data.submission.submittedAt || ''
         );
 
-        // Не принимаем старую отклонённую заявку
-        // за результат новой отправки.
         const isOldRejectedSubmission =
           data.submission.status === 'Отклонено' &&
           Number.isFinite(submittedAt) &&
