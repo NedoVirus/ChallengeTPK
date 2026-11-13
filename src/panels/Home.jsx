@@ -131,7 +131,77 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function convertImageToJpegDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
 
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Не удалось подготовить изображение.'));
+          return;
+        }
+
+        context.drawImage(
+          image,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(objectUrl);
+
+          if (!blob) {
+            reject(
+              new Error('Не удалось преобразовать скриншот в JPG.')
+            );
+            return;
+          }
+
+          const reader = new FileReader();
+
+          reader.onload = () => {
+            resolve(String(reader.result || ''));
+          };
+
+          reader.onerror = () => {
+            reject(
+              new Error('Не удалось прочитать подготовленный JPG.')
+            );
+          };
+
+          reader.readAsDataURL(blob);
+
+        }, 'image/jpeg', 0.95);
+
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      reject(
+        new Error('Браузер не смог открыть выбранное изображение.')
+      );
+    };
+
+    image.src = objectUrl;
+  });
+}
 function formatDateTime(value) {
   if (!value) {
     return '';
@@ -771,8 +841,17 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setSubmissionMessageType('info');
 
     try {
-      const dataUrl = await readFileAsDataUrl(screenshotFile);
-      const base64 = dataUrl.split(',')[1] || '';
+      const jpegDataUrl = await convertImageToJpegDataUrl(
+        screenshotFile
+      );
+
+      const originalBase64 = jpegDataUrl.split(',')[1] || '';
+
+      // Base64URL: безопасно передаётся через HTML-форму.
+      const base64 = originalBase64
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
 
       const result = await submitStepsResult({
         action: 'submit_result',
@@ -790,7 +869,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         }),
 
         file_name: screenshotFile.name,
-        mime_type: screenshotFile.type,
+        mime_type: 'image/jpeg',
         image_base64: base64,
       });
 
@@ -2217,7 +2296,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
      ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
   ===================================== */
 
-  if (profileLoading) {
+  if (profileLoading || !registrationChecked) {
     return (
       <Panel
         id={id}
