@@ -86,6 +86,12 @@ const ERROR_MESSAGES = {
     'Заявка не найдена.',
   submission_already_reviewed:
     'Эта заявка уже была проверена.',
+  invalid_first_name:
+    'Укажи имя участника.',
+  invalid_last_name:
+    'Укажи фамилию участника.',
+  invalid_group:
+    'Укажи номер группы цифрами.',
 };
 
 /* =====================================
@@ -223,6 +229,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [registrationMessage, setRegistrationMessage] = useState('');
   const [registrationMessageType, setRegistrationMessageType] = useState('');
 
+  // Мини-форма регистрации.
+  const [registrationFormOpen, setRegistrationFormOpen] = useState(false);
+  const [registrationFirstName, setRegistrationFirstName] = useState('');
+  const [registrationLastName, setRegistrationLastName] = useState('');
+  const [registrationGroup, setRegistrationGroup] = useState('');
+  const [registeredParticipant, setRegisteredParticipant] = useState(null);
+
   // Отправка результатов.
   const [resultDate, setResultDate] = useState(
     CHALLENGE_DAYS[0].value
@@ -268,12 +281,24 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     last_name,
   } = fetchedUser || {};
 
+  const displayFirstName =
+    registeredParticipant?.firstName ||
+    registrationFirstName ||
+    first_name ||
+    '';
+
+  const displayLastName =
+    registeredParticipant?.lastName ||
+    registrationLastName ||
+    last_name ||
+    '';
+
   const fullName =
-    [first_name, last_name].filter(Boolean).join(' ') || 'Участник';
+    [displayFirstName, displayLastName].filter(Boolean).join(' ') || 'Участник';
 
   const initials = [
-    first_name?.[0],
-    last_name?.[0],
+    displayFirstName?.[0],
+    displayLastName?.[0],
   ]
     .filter(Boolean)
     .join('')
@@ -375,6 +400,15 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   }, []);
 
   /* =====================================
+     ПРЕДЗАПОЛНЕНИЕ ФОРМЫ ДАННЫМИ VK
+  ===================================== */
+
+  useEffect(() => {
+    setRegistrationFirstName(current => current || first_name || '');
+    setRegistrationLastName(current => current || last_name || '');
+  }, [first_name, last_name]);
+
+  /* =====================================
      ПРОВЕРКА РЕГИСТРАЦИИ
   ===================================== */
 
@@ -401,6 +435,21 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
         if (data?.ok) {
           setIsRegistered(Boolean(data.registered));
+
+          if (data.registered && data.participant) {
+            setRegisteredParticipant(data.participant);
+
+            setRegistrationFirstName(
+              data.participant.firstName || first_name || ''
+            );
+
+            setRegistrationLastName(
+              data.participant.lastName || last_name || ''
+            );
+
+            setRegistrationGroup(data.participant.group || '');
+            setRegistrationFormOpen(false);
+          }
         } else {
           setRegistrationMessage(
             'Не удалось проверить регистрацию.'
@@ -435,6 +484,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   }, [
     userId,
     hasSignedLaunchParams,
+    first_name,
+    last_name,
   ]);
 
   /* =====================================
@@ -500,7 +551,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ]);
 
   /* =====================================
-     СТАТУСЫ ВСЕХ ДНЕЙ НА ГЛАВНОЙ
+     СТАТУСЫ ПЯТИ ДНЕЙ НА ГЛАВНОЙ
   ===================================== */
 
   useEffect(() => {
@@ -522,31 +573,34 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setHomeSubmissionsLoading(true);
 
     Promise.all(
-      CHALLENGE_DAYS.map(async day => {
-        try {
-          const data = await getGasJsonp('submission_status', {
-            ...signedLaunchParams,
-            challenge_date: day.value,
-          });
-
-          return [
-            day.value,
-            data?.ok && data.submitted ? data.submission : null,
-          ];
-        } catch (error) {
+      CHALLENGE_DAYS.map(day =>
+        getGasJsonp('submission_status', {
+          ...signedLaunchParams,
+          challenge_date: day.value,
+        }).catch(error => {
           console.warn(
             `Не удалось загрузить статус за ${day.value}:`,
             error
           );
 
-          return [day.value, null];
-        }
-      })
+          return null;
+        })
+      )
     )
-      .then(entries => {
-        if (active) {
-          setHomeSubmissions(Object.fromEntries(entries));
+      .then(results => {
+        if (!active) {
+          return;
         }
+
+        const statuses = {};
+
+        results.forEach((data, index) => {
+          if (data?.ok && data.submitted && data.submission) {
+            statuses[CHALLENGE_DAYS[index].value] = data.submission;
+          }
+        });
+
+        setHomeSubmissions(statuses);
       })
       .finally(() => {
         if (active) {
@@ -666,7 +720,30 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
      РЕГИСТРАЦИЯ
   ===================================== */
 
-  const handleRegister = async () => {
+  const openRegistrationForm = () => {
+    if (!hasSignedLaunchParams) {
+      setRegistrationMessage(
+        'Для регистрации открой STEP CHALLENGE непосредственно через VK.'
+      );
+
+      setRegistrationMessageType('error');
+      return;
+    }
+
+    if (isRegistered || registrationBusy || !registrationChecked) {
+      return;
+    }
+
+    setRegistrationFirstName(current => current || first_name || '');
+    setRegistrationLastName(current => current || last_name || '');
+    setRegistrationMessage('');
+    setRegistrationMessageType('');
+    setRegistrationFormOpen(true);
+  };
+
+  const handleRegister = async event => {
+    event?.preventDefault();
+
     if (!hasSignedLaunchParams) {
       setRegistrationMessage(
         'Для регистрации открой STEP CHALLENGE непосредственно через VK.'
@@ -680,15 +757,39 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       return;
     }
 
+    const cleanFirstName = registrationFirstName.trim().replace(/\s+/g, ' ');
+    const cleanLastName = registrationLastName.trim().replace(/\s+/g, ' ');
+    const cleanGroup = registrationGroup.trim();
+
+    if (!cleanFirstName || !cleanLastName || !cleanGroup) {
+      setRegistrationMessage('Заполни имя, фамилию и номер группы.');
+      setRegistrationMessageType('error');
+      return;
+    }
+
+    if (cleanFirstName.length > 40 || cleanLastName.length > 40) {
+      setRegistrationMessage('Имя и фамилия не должны быть длиннее 40 символов.');
+      setRegistrationMessageType('error');
+      return;
+    }
+
+    if (!/^\d{1,6}$/.test(cleanGroup)) {
+      setRegistrationMessage('В поле «Группа» укажи только цифры (до 6 знаков).');
+      setRegistrationMessageType('error');
+      return;
+    }
+
     setRegistrationBusy(true);
     setRegistrationMessage('');
+    setRegistrationMessageType('');
 
     try {
       const registrationData = {
         action: 'register',
         ...signedLaunchParams,
-        first_name: first_name || '',
-        last_name: last_name || '',
+        first_name: cleanFirstName,
+        last_name: cleanLastName,
+        group: cleanGroup,
         photo_200: photo_200 || '',
         city: city?.title || '',
       };
@@ -703,7 +804,18 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         );
       }
 
+      const participant = result.participant || {
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+        group: cleanGroup,
+      };
+
+      setRegisteredParticipant(participant);
+      setRegistrationFirstName(cleanFirstName);
+      setRegistrationLastName(cleanLastName);
+      setRegistrationGroup(cleanGroup);
       setIsRegistered(true);
+      setRegistrationFormOpen(false);
 
       setParticipantsCount(
         Number(result.registeredCount) || participantsCount
@@ -882,14 +994,19 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
       const result = await submitStepsResult({
         action: 'submit_result',
+
         ...signedLaunchParams,
+
         signed_launch_params: signedLaunchParams,
+
         challenge_date: resultDate,
         steps,
+
         phone_time: new Date().toLocaleTimeString('ru-RU', {
           hour: '2-digit',
           minute: '2-digit',
         }),
+
         file_name: screenshotFile.name,
         mime_type: 'image/jpeg',
         image_base64: base64,
@@ -1054,7 +1171,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
       // Удаляем сохранённый предпросмотр,
       // чтобы не хранить ненужные изображения в памяти.
-
       setModerationImages(previous => {
         const next = { ...previous };
         delete next[submission.id];
@@ -1066,6 +1182,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         delete next[submission.id];
         return next;
       });
+
+      setModerationReloadKey(value => value + 1);
 
     } catch (error) {
       console.error(
@@ -1113,7 +1231,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
           <button
             className="step-primary-button"
-            onClick={handleRegister}
+            onClick={() => {
+              if (registrationFormOpen) {
+                setRegistrationFormOpen(false);
+              } else {
+                openRegistrationForm();
+              }
+            }}
             type="button"
             disabled={
               !hasSignedLaunchParams ||
@@ -1124,16 +1248,282 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           >
             {isRegistered
               ? 'Вы участвуете'
-              : registrationBusy
-                ? 'Регистрируем...'
-                : !hasSignedLaunchParams
-                  ? 'Откройте через VK'
-                  : !registrationChecked
-                    ? 'Проверяем...'
+              : !hasSignedLaunchParams
+                ? 'Откройте через VK'
+                : !registrationChecked
+                  ? 'Проверяем...'
+                  : registrationFormOpen
+                    ? 'Свернуть форму'
                     : 'Участвовать'}
 
-            <span>↗</span>
+            <span>{isRegistered ? '✓' : '↗'}</span>
           </button>
+
+          {registrationFormOpen && !isRegistered && (
+            <div
+              className="step-registration-card"
+              style={{
+                width: '100%',
+                maxWidth: '390px',
+                marginTop: '18px',
+                padding: '17px',
+                borderRadius: '18px',
+                background: 'rgba(255,255,255,0.97)',
+                color: '#18232d',
+                textAlign: 'left',
+                boxShadow: '0 14px 35px rgba(0,0,0,0.18)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '11px',
+                paddingBottom: '13px',
+                marginBottom: '14px',
+                borderBottom: '1px solid #e8edf0',
+              }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  flex: '0 0 42px',
+                  overflow: 'hidden',
+                  borderRadius: '50%',
+                  background: '#e9eff2',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontWeight: 800,
+                  color: '#40515d',
+                }}>
+                  {photo_200 ? (
+                    <img
+                      src={photo_200}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    initials
+                  )}
+                </div>
+
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <strong style={{
+                    display: 'block',
+                    fontSize: '13px',
+                  }}>
+                    Профиль ВКонтакте подключён
+                  </strong>
+
+                  <span style={{
+                    display: 'block',
+                    marginTop: '3px',
+                    fontSize: '11px',
+                    color: '#71808b',
+                  }}>
+                    Подтверждённый VK ID: {userId}
+                  </span>
+                </div>
+
+                <span style={{
+                  padding: '5px 8px',
+                  borderRadius: '20px',
+                  background: '#e7f7eb',
+                  color: '#238044',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                }}>
+                  ✓ Подключён
+                </span>
+              </div>
+
+              <h3 style={{
+                margin: '0 0 5px',
+                fontSize: '16px',
+                fontWeight: 800,
+              }}>
+                Заполни данные участника
+              </h3>
+
+              <p style={{
+                margin: '0 0 14px',
+                fontSize: '11px',
+                lineHeight: 1.45,
+                color: '#71808b',
+              }}>
+                Имя и фамилия подставлены из профиля VK — при необходимости их можно исправить.
+              </p>
+
+              <form onSubmit={handleRegister}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '11px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#52616b',
+                }}>
+                  Имя
+
+                  <input
+                    type="text"
+                    autoComplete="given-name"
+                    value={registrationFirstName}
+                    onChange={event =>
+                      setRegistrationFirstName(event.target.value)
+                    }
+                    placeholder="Введите имя"
+                    maxLength={40}
+                    required
+                    disabled={registrationBusy}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '43px',
+                      marginTop: '6px',
+                      padding: '0 12px',
+                      border: '1px solid #dce4e9',
+                      borderRadius: '10px',
+                      background: '#f8fafb',
+                      color: '#18232d',
+                      font: 'inherit',
+                      fontSize: '13px',
+                      outlineColor: '#8bbd4b',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </label>
+
+                <label style={{
+                  display: 'block',
+                  marginBottom: '11px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#52616b',
+                }}>
+                  Фамилия
+
+                  <input
+                    type="text"
+                    autoComplete="family-name"
+                    value={registrationLastName}
+                    onChange={event =>
+                      setRegistrationLastName(event.target.value)
+                    }
+                    placeholder="Введите фамилию"
+                    maxLength={40}
+                    required
+                    disabled={registrationBusy}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '43px',
+                      marginTop: '6px',
+                      padding: '0 12px',
+                      border: '1px solid #dce4e9',
+                      borderRadius: '10px',
+                      background: '#f8fafb',
+                      color: '#18232d',
+                      font: 'inherit',
+                      fontSize: '13px',
+                      outlineColor: '#8bbd4b',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </label>
+
+                <label style={{
+                  display: 'block',
+                  marginBottom: '14px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#52616b',
+                }}>
+                  Группа
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{1,6}"
+                    value={registrationGroup}
+                    onChange={event =>
+                      setRegistrationGroup(
+                        event.target.value.replace(/\D/g, '').slice(0, 6)
+                      )
+                    }
+                    placeholder="Например, 21"
+                    maxLength={6}
+                    required
+                    disabled={registrationBusy}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '43px',
+                      marginTop: '6px',
+                      padding: '0 12px',
+                      border: '1px solid #dce4e9',
+                      borderRadius: '10px',
+                      background: '#f8fafb',
+                      color: '#18232d',
+                      font: 'inherit',
+                      fontSize: '13px',
+                      outlineColor: '#8bbd4b',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+
+                  <span style={{
+                    display: 'block',
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    fontWeight: 400,
+                    color: '#89959d',
+                  }}>
+                    Укажи номер группы цифрами.
+                  </span>
+                </label>
+
+                <button
+                  type="submit"
+                  className="step-primary-button"
+                  disabled={registrationBusy}
+                  style={{
+                    width: '100%',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {registrationBusy
+                    ? 'Регистрируем...'
+                    : 'Зарегистрироваться'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegistrationFormOpen(false);
+                    setRegistrationMessage('');
+                    setRegistrationMessageType('');
+                  }}
+                  disabled={registrationBusy}
+                  style={{
+                    width: '100%',
+                    marginTop: '8px',
+                    padding: '9px',
+                    border: 0,
+                    background: 'transparent',
+                    color: '#78858d',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Отмена
+                </button>
+              </form>
+            </div>
+          )}
 
           {!hasSignedLaunchParams && (
             <p style={{
@@ -1295,13 +1685,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
         <div className="step-info-card">
           <div className="step-info-icon orange">♙</div>
-
           <strong>
             {participantsCount === null
               ? '—'
               : formatNumber(participantsCount)}
           </strong>
-
           <span>Зарегистрировано</span>
         </div>
       </section>
@@ -1315,59 +1703,40 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
 
         <div className="step-days-card">
-          {CHALLENGE_DAYS.map(day => (
-            <div className="step-day" key={day.value}>
-              <div className="step-day-number">
-                {String(day.number).padStart(2, '0')}
-              </div>
+          {CHALLENGE_DAYS.map(day => {
+            const submission = homeSubmissions[day.value];
 
-              <div className="step-day-info">
-                <strong>{day.label}</strong>
-                <span>Цель — 10 000 шагов</span>
-              </div>
+            return (
+              <div className="step-day" key={day.value}>
+                <div className="step-day-number">
+                  {String(day.number).padStart(2, '0')}
+                </div>
 
-              <div className="step-day-status" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: '4px',
-                maxWidth: '48%',
-                textAlign: 'right',
-              }}>
-                {homeSubmissionsLoading ? (
-                  <span>Загрузка...</span>
-                ) : homeSubmissions[day.value] ? (
-                  <>
+                <div className="step-day-info">
+                  <strong>{day.label}</strong>
+                  <span>Цель — 10 000 шагов</span>
+
+                  {submission?.status === 'Отклонено' && submission.comment && (
                     <span style={{
-                      color: homeSubmissions[day.value].status === 'Одобрено'
-                        ? '#247a43'
-                        : homeSubmissions[day.value].status === 'Отклонено'
-                          ? '#c34b43'
-                          : '#9a751c',
-                      fontWeight: 700,
+                      display: 'block',
+                      marginTop: '5px',
+                      color: '#c34b43',
+                      fontSize: '11px',
+                      lineHeight: 1.4,
                     }}>
-                      {homeSubmissions[day.value].status || 'На проверке'}
+                      Причина: {submission.comment}
                     </span>
+                  )}
+                </div>
 
-                    {homeSubmissions[day.value].status === 'Отклонено' &&
-                      homeSubmissions[day.value].comment && (
-                        <span style={{
-                          color: '#c34b43',
-                          fontSize: '11px',
-                          lineHeight: 1.35,
-                          whiteSpace: 'normal',
-                          overflowWrap: 'anywhere',
-                        }}>
-                          {homeSubmissions[day.value].comment}
-                        </span>
-                      )}
-                  </>
-                ) : (
-                  <span>День {day.number}</span>
-                )}
+                <span className="step-day-status">
+                  {homeSubmissionsLoading
+                    ? 'Загрузка...'
+                    : submission?.status || 'Не отправлено'}
+                </span>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -1682,7 +2051,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               lineHeight: 1.5,
             }}>
               Отправлено шагов: {formatNumber(lastSubmission.steps)}
-
               {lastSubmission.submittedAt
                 ? ` · ${formatDateTime(lastSubmission.submittedAt)}`
                 : ''}
@@ -1841,7 +2209,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       ) : moderationSubmissions.length === 0 ? (
         <div className="step-empty-card">
           <div className="step-empty-icon">✓</div>
+
           <h2>Очередь пуста</h2>
+
           <p>
             Сейчас нет заявок, ожидающих проверки.
           </p>
@@ -2247,6 +2617,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <p>{city.title}</p>
         )}
 
+        {(registeredParticipant?.group || registrationGroup) && (
+          <p>Группа {registeredParticipant?.group || registrationGroup}</p>
+        )}
+
         <span className="step-profile-status">
           {isRegistered
             ? 'Участник STEP CHALLENGE'
@@ -2338,7 +2712,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 transform: rotate(360deg);
               }
             }
-
             @keyframes stepLoaderPulse {
               0%, 100% {
                 opacity: 0.45;
@@ -2349,7 +2722,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 transform: scale(1);
               }
             }
-
             @keyframes stepLoaderFade {
               from {
                 opacity: 0;
@@ -2446,7 +2818,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <div className="step-header-user">
             <div className="step-header-user-text">
               <span>Привет,</span>
-              <strong>{first_name || 'участник'}</strong>
+              <strong>{displayFirstName || 'участник'}</strong>
             </div>
 
             <div className="step-avatar">
