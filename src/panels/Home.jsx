@@ -2623,7 +2623,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
         <span className="step-profile-status">
           {isRegistered
-            ? 'Участник STEP CHALLENGE'
+            ? 'Участник челленджа'
             : 'Пока не зарегистрирован'}
         </span>
       </div>
@@ -2802,7 +2802,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       id={id}
       className="step-panel"
     >
-      <PanelHeader>STEP CHALLENGE</PanelHeader>
+      <PanelHeader>Челлендж | ТПК</PanelHeader>
 
       <div className="step-page">
         <header className="step-header">
@@ -2877,7 +2877,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </nav>
 
         <footer className="step-footer">
-          STEP CHALLENGE
           <span>Каждый шаг имеет значение.</span>
         </footer>
       </div>
