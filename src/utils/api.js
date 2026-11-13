@@ -1,17 +1,14 @@
-
 const API_URL =
   'https://script.google.com/macros/s/AKfycby131tLHIX7DyqQFXkBxH0tkdd3pX6Qy0EfKCTsqb4RSVRmIjTvQWv2E7PzbPu8WpDiXQ/exec';
 
 let callbackCounter = 0;
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
-/**
- * GET через JSONP.
- */
-export function getGasJsonp(action, params = {}) {
+/* =====================================
+   GET: JSONP
+===================================== */
+
+export function getGasJsonp(action, params = {}, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
     const callbackName =
       `__stepChallengeCallback${Date.now()}${++callbackCounter}`;
@@ -37,13 +34,14 @@ export function getGasJsonp(action, params = {}) {
       delete window[callbackName];
     };
 
-    window[callbackName] = (data) => {
+    window[callbackName] = data => {
       cleanup();
       resolve(data);
     };
 
     script.onerror = () => {
       cleanup();
+
       reject(
         new Error('Не удалось подключиться к Google Apps Script')
       );
@@ -51,10 +49,11 @@ export function getGasJsonp(action, params = {}) {
 
     timeout = setTimeout(() => {
       cleanup();
+
       reject(
         new Error('Превышено время ожидания ответа Google Apps Script')
       );
-    }, 20000);
+    }, timeoutMs);
 
     script.async = true;
     script.src = url.toString();
@@ -64,12 +63,10 @@ export function getGasJsonp(action, params = {}) {
 }
 
 
-/**
- * POST через скрытый iframe.
- *
- * Google Apps Script возвращает HTML-страницу,
- * которая передаёт настоящий результат через postMessage.
- */
+/* =====================================
+   POST: СКРЫТАЯ HTML-ФОРМА + IFRAME
+===================================== */
+
 function sendGasForm(payload, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const requestId =
@@ -81,6 +78,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
     iframe.setAttribute('aria-hidden', 'true');
 
     const form = document.createElement('form');
+
     form.method = 'POST';
     form.action = API_URL;
     form.target = requestId;
@@ -93,6 +91,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
       }
 
       const input = document.createElement('input');
+
       input.type = 'hidden';
       input.name = key;
       input.value = String(value);
@@ -120,8 +119,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
       callback(value);
     };
 
-    const handleMessage = (event) => {
-      // Принимаем сообщение только от созданного нами iframe.
+    const handleMessage = event => {
       if (event.source !== iframe.contentWindow) {
         return;
       }
@@ -140,6 +138,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
           reject,
           new Error('Google Apps Script вернул некорректный ответ.')
         );
+
         return;
       }
 
@@ -174,9 +173,10 @@ function sendGasForm(payload, timeoutMs = 30000) {
 }
 
 
-/**
- * Регистрация участника.
- */
+/* =====================================
+   РЕГИСТРАЦИЯ
+===================================== */
+
 export async function postGasForm(payload) {
   const userId = String(payload.vk_user_id || '');
 
@@ -192,7 +192,8 @@ export async function postGasForm(payload) {
 
   if (!result?.ok) {
     throw new Error(
-      result?.error || 'Google Apps Script отклонил регистрацию.'
+      result?.error ||
+      'Google Apps Script отклонил регистрацию.'
     );
   }
 
@@ -205,9 +206,10 @@ export async function postGasForm(payload) {
 }
 
 
-/**
- * Отправка ежедневного результата со скриншотом Google Fit.
- */
+/* =====================================
+   ОТПРАВКА РЕЗУЛЬТАТА
+===================================== */
+
 export async function submitStepsResult(payload) {
   const userId = String(payload.vk_user_id || '');
 
@@ -240,24 +242,34 @@ export async function submitStepsResult(payload) {
     const messages = {
       server_not_configured:
         'Не настроены параметры VK в Apps Script.',
+
       vk_signature_missing:
         'Не найдена подпись VK. Перезапусти приложение через VK.',
+
       invalid_vk_signature:
         'VK не подтвердил подлинность запуска.',
+
       participant_not_registered:
         'Сначала зарегистрируйся в челлендже.',
+
       invalid_challenge_date:
         'Неверная дата результата.',
+
       future_challenge_date:
         'Нельзя отправить результат за будущий день.',
+
       challenge_not_active:
         'Челлендж не активен на выбранную дату.',
+
       invalid_steps:
         'Некорректное количество шагов.',
+
       invalid_image_type:
         'Поддерживаются только JPG, PNG и WEBP.',
+
       invalid_image_size:
         'Размер изображения превышает допустимый.',
+
       invalid_image_data:
         'Не удалось прочитать изображение.',
     };
@@ -269,8 +281,6 @@ export async function submitStepsResult(payload) {
     );
   }
 
-  // Если результат уже отправлялся,
-  // получаем состояние существующей заявки.
   if (result.status === 'already_submitted') {
     const current = await getGasJsonp(
       'submission_status',
@@ -289,14 +299,125 @@ export async function submitStepsResult(payload) {
   }
 
   return {
-    ok: true,
-    status: 'На проверке',
-    submission: {
-      steps: Number(payload.steps) || 0,
-      status: 'На проверке',
-      submittedAt: new Date().toISOString(),
-      comment: '',
-    },
-    message: 'Скриншот отправлен и ожидает проверки модератором.',
+    ...result,
+    message:
+      result.message ||
+      'Скриншот отправлен на проверку модератору.',
   };
+}
+
+
+/* =====================================
+   ОЧЕРЕДЬ МОДЕРАЦИИ
+===================================== */
+
+export async function getModerationQueue(signedLaunchParams) {
+  const result = await getGasJsonp(
+    'moderation_queue',
+    signedLaunchParams
+  );
+
+  if (!result?.ok) {
+    const messages = {
+      moderator_access_denied:
+        'У этого аккаунта нет доступа к модерации.',
+
+      invalid_vk_signature:
+        'Не удалось подтвердить аккаунт VK.',
+
+      server_not_configured:
+        'Не настроены параметры VK в Apps Script.',
+    };
+
+    throw new Error(
+      messages[result?.error] ||
+      result?.error ||
+      'Не удалось загрузить очередь модерации.'
+    );
+  }
+
+  return result.submissions || [];
+}
+
+
+/* =====================================
+   ЗАГРУЗКА ИЗОБРАЖЕНИЯ ДЛЯ МОДЕРАТОРА
+===================================== */
+
+export async function getModerationImage(
+  signedLaunchParams,
+  submissionId
+) {
+  const result = await getGasJsonp(
+    'moderation_image',
+    {
+      ...signedLaunchParams,
+      submission_id: submissionId,
+    },
+    90000
+  );
+
+  if (!result?.ok) {
+    throw new Error(
+      result?.error ||
+      'Не удалось загрузить скриншот.'
+    );
+  }
+
+  return {
+    mimeType: result.mimeType,
+    imageBase64: result.imageBase64,
+  };
+}
+
+
+/* =====================================
+   ОДОБРЕНИЕ / ОТКЛОНЕНИЕ
+===================================== */
+
+export async function moderateSubmission(payload) {
+  if (!payload?.submission_id) {
+    throw new Error('Не указан ID заявки.');
+  }
+
+  if (
+    !['Одобрено', 'Отклонено'].includes(payload.decision)
+  ) {
+    throw new Error('Не выбрано решение модератора.');
+  }
+
+  const result = await sendGasForm(
+    {
+      action: 'moderate_result',
+      ...payload,
+    },
+    30000
+  );
+
+  if (!result?.ok) {
+    const messages = {
+      moderator_access_denied:
+        'У этого аккаунта нет доступа к модерации.',
+
+      submission_not_found:
+        'Заявка не найдена.',
+
+      submission_already_reviewed:
+        'Эта заявка уже была проверена.',
+
+      invalid_moderation_decision:
+        'Некорректное решение модератора.',
+
+      invalid_vk_signature:
+        'VK не подтвердил подлинность аккаунта.',
+    };
+
+    throw new Error(
+      messages[result?.error] ||
+      result?.error ||
+      'Не удалось сохранить решение модератора.'
+    );
+  }
+
+  return result;
 }

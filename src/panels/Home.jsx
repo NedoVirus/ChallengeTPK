@@ -2,15 +2,46 @@ import { useEffect, useRef, useState } from 'react';
 import { Panel, PanelHeader } from '@vkontakte/vkui';
 import PropTypes from 'prop-types';
 
-import { getGasJsonp, postGasForm, submitStepsResult } from '../utils/api';
+import {
+  getGasJsonp,
+  postGasForm,
+  submitStepsResult,
+  getModerationQueue,
+  getModerationImage,
+  moderateSubmission,
+} from '../utils/api';
+
 import './Home.css';
 
+
+const MODERATOR_VK_ID = '620583350';
+
 const CHALLENGE_DAYS = [
-  { value: '2026-11-23', label: 'Понедельник, 23 ноября', number: 1 },
-  { value: '2026-11-24', label: 'Вторник, 24 ноября', number: 2 },
-  { value: '2026-11-25', label: 'Среда, 25 ноября', number: 3 },
-  { value: '2026-11-26', label: 'Четверг, 26 ноября', number: 4 },
-  { value: '2026-11-27', label: 'Пятница, 27 ноября', number: 5 },
+  {
+    value: '2026-11-23',
+    label: 'Понедельник, 23 ноября',
+    number: 1,
+  },
+  {
+    value: '2026-11-24',
+    label: 'Вторник, 24 ноября',
+    number: 2,
+  },
+  {
+    value: '2026-11-25',
+    label: 'Среда, 25 ноября',
+    number: 3,
+  },
+  {
+    value: '2026-11-26',
+    label: 'Четверг, 26 ноября',
+    number: 4,
+  },
+  {
+    value: '2026-11-27',
+    label: 'Пятница, 27 ноября',
+    number: 5,
+  },
 ];
 
 const MAX_SCREENSHOT_SIZE = 4 * 1024 * 1024;
@@ -24,47 +55,63 @@ const ALLOWED_IMAGE_TYPES = [
 const ERROR_MESSAGES = {
   server_not_configured:
     'Не настроены VK_APP_ID или VK_APP_SECRET в Apps Script.',
+
   vk_signature_missing:
     'Отсутствует подпись запуска VK. Открой приложение через VK.',
+
   vk_params_missing:
     'Не удалось получить параметры запуска VK.',
+
   invalid_vk_app_id:
     'ID приложения VK не совпадает с настройками сервера.',
+
   invalid_vk_user_id:
     'Не удалось определить пользователя VK.',
+
   invalid_vk_signature:
     'VK не подтвердил подлинность запуска. Перезапусти приложение.',
+
   unknown_action:
     'Неизвестная операция сервера.',
+
   participant_not_registered:
     'Сначала необходимо зарегистрироваться в челлендже.',
+
   invalid_challenge_date:
     'Выбрана дата вне периода челленджа.',
+
   future_challenge_date:
     'Результат за этот день пока нельзя отправить.',
+
   challenge_not_active:
-    'На выбранную дату челлендж не активен. Проверь лист «Челленджи».',
+    'Челлендж не активен на выбранную дату.',
+
   invalid_steps:
     'Укажи количество шагов от 1 до 100 000.',
+
   invalid_image_type:
     'Можно загрузить только JPG, PNG или WEBP.',
+
   invalid_image_size:
     'Размер скриншота не должен превышать 4 МБ.',
+
   invalid_image_data:
     'Не удалось прочитать изображение. Выбери скриншот ещё раз.',
+
+  moderator_access_denied:
+    'У этого аккаунта нет доступа к модерации.',
+
+  submission_not_found:
+    'Заявка не найдена.',
+
+  submission_already_reviewed:
+    'Эта заявка уже была проверена.',
 };
 
 
-function getLocalDateString() {
-  const now = new Date();
-
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
+/* =====================================
+   ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+===================================== */
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -85,23 +132,56 @@ function readFileAsDataUrl(file) {
 }
 
 
+function formatDateTime(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('ru-RU');
+}
+
+
+/* =====================================
+   ОСНОВНОЙ КОМПОНЕНТ
+===================================== */
+
 export const Home = ({ id, fetchedUser, launchParams }) => {
   const [activeTab, setActiveTab] = useState('home');
 
-  const [participantsCount, setParticipantsCount] = useState(null);
+  // Загрузка профиля VK.
+  const [profileLoading, setProfileLoading] = useState(true);
 
+  // Регистрация.
+  const [participantsCount, setParticipantsCount] = useState(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [registrationChecked, setRegistrationChecked] = useState(false);
   const [registrationBusy, setRegistrationBusy] = useState(false);
   const [registrationMessage, setRegistrationMessage] = useState('');
   const [registrationMessageType, setRegistrationMessageType] = useState('');
 
+  // Отправка результатов.
   const [resultDate, setResultDate] = useState(
     CHALLENGE_DAYS[0].value
   );
 
   const [stepsValue, setStepsValue] = useState('');
-
   const [screenshotFile, setScreenshotFile] = useState(null);
   const [screenshotPreview, setScreenshotPreview] = useState('');
 
@@ -112,8 +192,20 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [lastSubmission, setLastSubmission] = useState(null);
   const [submissionStatusLoading, setSubmissionStatusLoading] = useState(false);
 
+  // Рейтинг.
   const [ratingRows, setRatingRows] = useState([]);
   const [ratingLoading, setRatingLoading] = useState(false);
+
+  // Модерация.
+  const [moderationSubmissions, setModerationSubmissions] = useState([]);
+  const [moderationLoading, setModerationLoading] = useState(false);
+  const [moderationError, setModerationError] = useState('');
+  const [moderationMessage, setModerationMessage] = useState('');
+  const [moderationImages, setModerationImages] = useState({});
+  const [moderationImageLoading, setModerationImageLoading] = useState({});
+  const [moderationComments, setModerationComments] = useState({});
+  const [moderationBusyId, setModerationBusyId] = useState('');
+  const [moderationReloadKey, setModerationReloadKey] = useState(0);
 
   const rulesRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -152,6 +244,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   );
 
 
+  const isModerator = userId === MODERATOR_VK_ID;
+
+
   const signedLaunchParams = Object.fromEntries(
     Object.entries(launchParams || {}).filter(
       ([key, value]) =>
@@ -162,8 +257,45 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   );
 
 
-  // Освобождаем URL предпросмотра,
-  // когда файл меняется или экран закрывается.
+  /* =====================================
+     ЗАГРУЗКА ПРОФИЛЯ VK
+  ===================================== */
+
+  useEffect(() => {
+    // Показываем главный экран только после получения
+    // имени, фамилии и фотографии профиля.
+
+    const profileIsComplete = Boolean(
+      first_name &&
+      last_name &&
+      photo_200
+    );
+
+    if (profileIsComplete) {
+      setProfileLoading(false);
+      return;
+    }
+
+    // Если VK не вернул все данные,
+    // не держим пользователя на загрузке бесконечно.
+
+    const timeout = setTimeout(() => {
+      setProfileLoading(false);
+    }, 12000);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [
+    first_name,
+    last_name,
+    photo_200,
+  ]);
+
+
+  /* =====================================
+     ОСВОБОЖДЕНИЕ ПРЕДПРОСМОТРА ФАЙЛА
+  ===================================== */
 
   useEffect(() => {
     return () => {
@@ -260,11 +392,14 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     return () => {
       active = false;
     };
-  }, [userId, hasSignedLaunchParams]);
+  }, [
+    userId,
+    hasSignedLaunchParams,
+  ]);
 
 
   /* =====================================
-     ПРОВЕРКА ОТПРАВКИ ЗА ВЫБРАННЫЙ ДЕНЬ
+     СТАТУС РЕЗУЛЬТАТА
   ===================================== */
 
   useEffect(() => {
@@ -294,7 +429,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
         if (data?.ok) {
           setLastSubmission(
-            data.submitted ? data.submission : null
+            data.submitted
+              ? data.submission
+              : null
           );
         }
       })
@@ -320,6 +457,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     isRegistered,
     userId,
     launchParams,
+    moderationReloadKey,
   ]);
 
 
@@ -360,6 +498,65 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       active = false;
     };
   }, [activeTab]);
+
+
+  /* =====================================
+     ЗАГРУЗКА ОЧЕРЕДИ МОДЕРАЦИИ
+  ===================================== */
+
+  useEffect(() => {
+    let active = true;
+
+    if (
+      activeTab !== 'moderation' ||
+      !isModerator ||
+      !hasSignedLaunchParams
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+
+    setModerationLoading(true);
+    setModerationError('');
+    setModerationMessage('');
+
+    getModerationQueue(signedLaunchParams)
+      .then(items => {
+        if (active) {
+          setModerationSubmissions(items);
+        }
+      })
+      .catch(error => {
+        if (active) {
+          console.error(
+            'Ошибка загрузки модерации:',
+            error
+          );
+
+          setModerationError(
+            ERROR_MESSAGES[error.message] ||
+            error.message ||
+            'Не удалось загрузить очередь модерации.'
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setModerationLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    activeTab,
+    isModerator,
+    hasSignedLaunchParams,
+    userId,
+    launchParams,
+  ]);
 
 
   /* =====================================
@@ -443,7 +640,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
 
   /* =====================================
-     РАБОТА СО СКРИНШОТОМ
+     СКРИНШОТ
   ===================================== */
 
   const removeScreenshot = () => {
@@ -460,7 +657,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   };
 
 
-  const handleScreenshotChange = (event) => {
+  const handleScreenshotChange = event => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -548,17 +745,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       return;
     }
 
-    // Не даём отправить данные за будущий день.
-    // Повторная проверка выполняется также на сервере.
-
-    if (resultDate > getLocalDateString()) {
-      setSubmissionMessage(
-        'Отправить результат за выбранный день можно только в этот день или позже.'
-      );
-
-      setSubmissionMessageType('error');
-      return;
-    }
+    // Проверку будущей даты убрали для тестирования.
+    // Сервер всё равно разрешает только 23–27 ноября 2026.
 
     if (
       lastSubmission &&
@@ -606,14 +794,19 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         image_base64: base64,
       });
 
-      setLastSubmission(
-        result.submission || {
-          steps,
-          status: result.status || 'На проверке',
-          submittedAt: new Date().toISOString(),
-          comment: '',
-        }
-      );
+      if (result.status === 'already_submitted') {
+        setLastSubmission(result.submission || null);
+
+      } else {
+        setLastSubmission(
+          result.submission || {
+            steps,
+            status: 'На проверке',
+            submittedAt: new Date().toISOString(),
+            comment: '',
+          }
+        );
+      }
 
       setSubmissionMessage(
         result.message || 'Скриншот отправлен на проверку.'
@@ -643,23 +836,155 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   };
 
 
-  const formatSubmissionDate = (value) => {
-    if (!value) {
-      return '';
+  /* =====================================
+     МОДЕРАЦИЯ: ЗАГРУЗИТЬ СКРИНШОТ
+  ===================================== */
+
+  const handleLoadModerationImage = async submissionId => {
+    if (moderationImages[submissionId]) {
+      return;
     }
 
-    const date = new Date(value);
+    setModerationImageLoading(previous => ({
+      ...previous,
+      [submissionId]: true,
+    }));
 
-    if (Number.isNaN(date.getTime())) {
-      return '';
+    setModerationError('');
+
+    try {
+      const image = await getModerationImage(
+        signedLaunchParams,
+        submissionId
+      );
+
+      const dataUrl =
+        `data:${image.mimeType};base64,${image.imageBase64}`;
+
+      setModerationImages(previous => ({
+        ...previous,
+        [submissionId]: dataUrl,
+      }));
+
+    } catch (error) {
+      console.error(
+        'Ошибка загрузки скриншота:',
+        error
+      );
+
+      setModerationError(
+        ERROR_MESSAGES[error.message] ||
+        error.message ||
+        'Не удалось открыть изображение.'
+      );
+
+    } finally {
+      setModerationImageLoading(previous => ({
+        ...previous,
+        [submissionId]: false,
+      }));
+    }
+  };
+
+
+  /* =====================================
+     МОДЕРАЦИЯ: КОММЕНТАРИЙ
+  ===================================== */
+
+  const handleModerationCommentChange = (
+    submissionId,
+    value
+  ) => {
+    setModerationComments(previous => ({
+      ...previous,
+      [submissionId]: value,
+    }));
+  };
+
+
+  /* =====================================
+     МОДЕРАЦИЯ: РЕШЕНИЕ
+  ===================================== */
+
+  const handleModerationDecision = async (
+    submission,
+    decision
+  ) => {
+    if (!isModerator) {
+      return;
     }
 
-    return date.toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const comment = String(
+      moderationComments[submission.id] || ''
+    ).trim();
+
+    if (
+      decision === 'Отклонено' &&
+      !comment
+    ) {
+      setModerationMessage(
+        'Напиши комментарий с причиной отклонения.'
+      );
+
+      return;
+    }
+
+    setModerationBusyId(submission.id);
+    setModerationMessage('');
+    setModerationError('');
+
+    try {
+      const result = await moderateSubmission({
+        ...signedLaunchParams,
+
+        submission_id: submission.id,
+        decision,
+        comment,
+      });
+
+      setModerationSubmissions(previous =>
+        previous.filter(item => item.id !== submission.id)
+      );
+
+      setModerationMessage(
+        result.message ||
+        (
+          decision === 'Одобрено'
+            ? 'Результат одобрен.'
+            : 'Результат отклонён.'
+        )
+      );
+
+      // Удаляем сохранённый предпросмотр,
+      // чтобы не хранить ненужные изображения в памяти.
+
+      setModerationImages(previous => {
+        const next = { ...previous };
+        delete next[submission.id];
+        return next;
+      });
+
+      setModerationComments(previous => {
+        const next = { ...previous };
+        delete next[submission.id];
+        return next;
+      });
+
+    } catch (error) {
+      console.error(
+        'Ошибка модерации:',
+        error
+      );
+
+      setModerationError(
+        ERROR_MESSAGES[error.message] ||
+        error.message ||
+        'Не удалось сохранить решение.'
+      );
+
+    } finally {
+      setModerationBusyId('');
+    }
   };
 
 
@@ -781,8 +1106,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       </section>
 
 
-      {/* Отправка дневного результата */}
-
       <section className="step-section">
         <div className="step-section-heading">
           <div>
@@ -838,7 +1161,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             <span className="step-goal-icon">↗</span>
 
             <span className="step-goal-status">
-              Ожидает запуска
+              Ожидает результатов
             </span>
           </div>
 
@@ -883,7 +1206,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <strong>
             {participantsCount === null
               ? '—'
-              : participantsCount.toLocaleString('ru-RU')}
+              : formatNumber(participantsCount)}
           </strong>
 
           <span>Зарегистрировано</span>
@@ -983,18 +1306,21 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
 
   /* =====================================
-     ОТПРАВКА РЕЗУЛЬТАТА
+     СТРАНИЦА ОТПРАВКИ РЕЗУЛЬТАТА
   ===================================== */
 
   const renderSubmit = () => {
-    const hasPendingOrApproved = lastSubmission &&
-      ['На проверке', 'Одобрено'].includes(lastSubmission.status);
+    const hasPendingOrApproved = Boolean(
+      lastSubmission &&
+      ['На проверке', 'Одобрено'].includes(lastSubmission.status)
+    );
 
-    const statusColor = lastSubmission?.status === 'Одобрено'
-      ? '#247a43'
-      : lastSubmission?.status === 'Отклонено'
-        ? '#c34b43'
-        : '#9a751c';
+    const statusColor =
+      lastSubmission?.status === 'Одобрено'
+        ? '#247a43'
+        : lastSubmission?.status === 'Отклонено'
+          ? '#c34b43'
+          : '#9a751c';
 
     return (
       <section
@@ -1052,9 +1378,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             marginTop: '7px',
             opacity: 0.75,
           }}>
-            Все изображения сначала проверяются модератором.
-            Наличие дополнительных карточек активности
-            автоматически не отклоняет заявку.
+            Все изображения проверяются модератором.
+            Дополнительные карточки активности автоматически
+            не отклоняют заявку.
           </span>
         </div>
 
@@ -1075,6 +1401,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             setStepsValue('');
             removeScreenshot();
             setSubmissionMessage('');
+            setSubmissionMessageType('');
           }}
           disabled={submissionBusy}
           style={{
@@ -1088,7 +1415,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           }}
         >
           {CHALLENGE_DAYS.map(day => (
-            <option key={day.value} value={day.value}>
+            <option
+              key={day.value}
+              value={day.value}
+            >
               День {day.number} — {day.label}
             </option>
           ))}
@@ -1143,7 +1473,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={handleScreenshotChange}
-          disabled={submissionBusy || Boolean(hasPendingOrApproved)}
+          disabled={submissionBusy || hasPendingOrApproved}
           style={{
             width: '100%',
             fontSize: '13px',
@@ -1156,7 +1486,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           opacity: 0.7,
           lineHeight: 1.45,
         }}>
-          JPG, PNG или WEBP. Максимальный размер файла — 4 МБ.
+          JPG, PNG или WEBP. Максимальный размер — 4 МБ.
         </p>
 
 
@@ -1230,12 +1560,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               fontSize: '13px',
               lineHeight: 1.5,
             }}>
-              Отправлено шагов: {Number(
-                lastSubmission.steps || 0
-              ).toLocaleString('ru-RU')}
+              Отправлено шагов: {formatNumber(lastSubmission.steps)}
 
               {lastSubmission.submittedAt
-                ? ` · ${formatSubmissionDate(lastSubmission.submittedAt)}`
+                ? ` · ${formatDateTime(lastSubmission.submittedAt)}`
                 : ''}
             </span>
 
@@ -1288,7 +1616,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             !hasSignedLaunchParams ||
             submissionBusy ||
             submissionStatusLoading ||
-            Boolean(hasPendingOrApproved)
+            hasPendingOrApproved
           }
           style={{
             width: '100%',
@@ -1320,6 +1648,401 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       </section>
     );
   };
+
+
+  /* =====================================
+     СТРАНИЦА МОДЕРАЦИИ
+  ===================================== */
+
+  const renderModeration = () => (
+    <section
+      className="step-inner-page"
+      style={{ paddingBottom: '30px' }}
+    >
+      <button
+        type="button"
+        onClick={() => setActiveTab('profile')}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          padding: '8px 0',
+          color: 'var(--vkui--color_text_link, #2678d8)',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        ← В профиль
+      </button>
+
+      <span className="step-overline">
+        ПАНЕЛЬ АДМИНИСТРАТОРА
+      </span>
+
+      <h1>Модерация</h1>
+
+      <p className="step-page-description">
+        Проверяй скриншоты студентов, одобряй или отклоняй
+        результаты и оставляй комментарии.
+      </p>
+
+
+      {moderationMessage && (
+        <div style={{
+          padding: '12px',
+          margin: '14px 0',
+          borderRadius: '12px',
+          background: 'var(--vkui--color_background_secondary, #f3f4f5)',
+          color: 'var(--vkui--color_text_primary, #222)',
+          fontSize: '13px',
+        }}>
+          {moderationMessage}
+        </div>
+      )}
+
+
+      {moderationError && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px',
+            margin: '14px 0',
+            borderRadius: '12px',
+            background: '#fff0ef',
+            color: '#b43b32',
+            fontSize: '13px',
+          }}
+        >
+          {moderationError}
+        </div>
+      )}
+
+
+      {moderationLoading ? (
+        <div className="step-empty-card">
+          <p>Загружаем заявки...</p>
+        </div>
+      ) : moderationSubmissions.length === 0 ? (
+        <div className="step-empty-card">
+          <div className="step-empty-icon">✓</div>
+
+          <h2>Очередь пуста</h2>
+
+          <p>
+            Сейчас нет заявок, ожидающих проверки.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setModerationReloadKey(value => value + 1)}
+            style={{
+              marginTop: '12px',
+              padding: '10px 16px',
+              border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+              borderRadius: '10px',
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          >
+            Обновить
+          </button>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            margin: '18px 0 12px',
+          }}>
+            <strong>
+              Ожидают проверки: {moderationSubmissions.length}
+            </strong>
+
+            <button
+              type="button"
+              onClick={() => setModerationReloadKey(value => value + 1)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--vkui--color_text_link, #2678d8)',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Обновить
+            </button>
+          </div>
+
+          {moderationSubmissions.map(submission => {
+            const image = moderationImages[submission.id];
+
+            const imageLoading =
+              Boolean(moderationImageLoading[submission.id]);
+
+            const busy =
+              moderationBusyId === submission.id;
+
+            return (
+              <article
+                key={submission.id}
+                style={{
+                  padding: '15px',
+                  marginBottom: '15px',
+                  borderRadius: '16px',
+                  border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+                  background: 'var(--vkui--color_background_content, #fff)',
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                }}>
+                  <div>
+                    <strong style={{
+                      display: 'block',
+                      fontSize: '16px',
+                    }}>
+                      {submission.participant || 'Участник'}
+                    </strong>
+
+                    <span style={{
+                      display: 'block',
+                      marginTop: '4px',
+                      fontSize: '12px',
+                      opacity: 0.65,
+                    }}>
+                      VK ID: {submission.vkUserId}
+                    </span>
+                  </div>
+
+                  <span style={{
+                    padding: '5px 8px',
+                    borderRadius: '8px',
+                    background: '#fff4d7',
+                    color: '#946b13',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    На проверке
+                  </span>
+                </div>
+
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '10px',
+                  marginTop: '14px',
+                  fontSize: '13px',
+                }}>
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Дата результата
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {submission.date}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Количество шагов
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {formatNumber(submission.steps)}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Время телефона
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {submission.phoneTime || 'Не указано'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Получено сервером
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {formatDateTime(submission.submittedAt)}
+                    </strong>
+                  </div>
+                </div>
+
+
+                {!image && (
+                  <button
+                    type="button"
+                    disabled={imageLoading}
+                    onClick={() => handleLoadModerationImage(submission.id)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      marginTop: '15px',
+                      padding: '12px',
+                      border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+                      borderRadius: '10px',
+                      background: 'var(--vkui--color_background_secondary, #f3f4f5)',
+                      color: 'var(--vkui--color_text_primary, #222)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {imageLoading
+                      ? 'Загружаем изображение...'
+                      : 'Показать скриншот'}
+                  </button>
+                )}
+
+
+                {image && (
+                  <div style={{
+                    marginTop: '14px',
+                  }}>
+                    <img
+                      src={image}
+                      alt={`Скриншот ${submission.participant}`}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        maxHeight: '600px',
+                        objectFit: 'contain',
+                        borderRadius: '10px',
+                        background: '#eee',
+                      }}
+                    />
+                  </div>
+                )}
+
+
+                <label
+                  htmlFor={`moderation-comment-${submission.id}`}
+                  style={{
+                    display: 'block',
+                    margin: '16px 0 7px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Комментарий модератора
+                </label>
+
+                <textarea
+                  id={`moderation-comment-${submission.id}`}
+                  value={moderationComments[submission.id] || ''}
+                  onChange={event =>
+                    handleModerationCommentChange(
+                      submission.id,
+                      event.target.value
+                    )
+                  }
+                  placeholder="Например: дата на скриншоте не совпадает..."
+                  rows={3}
+                  maxLength={1000}
+                  disabled={busy}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '11px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--vkui--color_field_border, #c8c8c8)',
+                    background: 'var(--vkui--color_field_background, #fff)',
+                    color: 'var(--vkui--color_text_primary, #222)',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    fontSize: '13px',
+                  }}
+                />
+
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '9px',
+                  marginTop: '12px',
+                }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      handleModerationDecision(
+                        submission,
+                        'Одобрено'
+                      )
+                    }
+                    style={{
+                      padding: '12px 8px',
+                      border: 'none',
+                      borderRadius: '10px',
+                      background: '#dff5e5',
+                      color: '#176b32',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {busy ? 'Сохраняем...' : '✓ Одобрить'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      handleModerationDecision(
+                        submission,
+                        'Отклонено'
+                      )
+                    }
+                    style={{
+                      padding: '12px 8px',
+                      border: 'none',
+                      borderRadius: '10px',
+                      background: '#ffe7e5',
+                      color: '#b43b32',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {busy ? 'Сохраняем...' : '✕ Отклонить'}
+                  </button>
+                </div>
+
+                <p style={{
+                  margin: '9px 0 0',
+                  fontSize: '11px',
+                  opacity: 0.6,
+                  lineHeight: 1.4,
+                }}>
+                  При отклонении необходимо указать причину в комментарии.
+                </p>
+              </article>
+            );
+          })}
+        </>
+      )}
+    </section>
+  );
 
 
   /* =====================================
@@ -1371,7 +2094,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 </strong>
 
                 <span>
-                  {Number(item.steps || 0).toLocaleString('ru-RU')} шагов
+                  {formatNumber(item.steps)} шагов
                 </span>
               </div>
 
@@ -1441,8 +2164,156 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           </strong>
         </div>
       </div>
+
+
+      {isModerator && (
+        <div style={{
+          marginTop: '18px',
+          padding: '15px',
+          borderRadius: '15px',
+          border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+        }}>
+          <span className="step-overline">
+            ADMIN PANEL
+          </span>
+
+          <h2 style={{
+            margin: '5px 0 12px',
+          }}>
+            Панель модератора
+          </h2>
+
+          <p style={{
+            fontSize: '13px',
+            lineHeight: 1.5,
+            opacity: 0.7,
+          }}>
+            Проверяй скриншоты участников и управляй результатами челленджа.
+          </p>
+
+          <button
+            type="button"
+            className="step-primary-button"
+            onClick={() => {
+              setActiveTab('moderation');
+              setModerationMessage('');
+              setModerationError('');
+            }}
+            style={{
+              width: '100%',
+              marginTop: '10px',
+            }}
+          >
+            Модерация
+            <span>↗</span>
+          </button>
+        </div>
+      )}
     </section>
   );
+
+
+  /* =====================================
+     ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
+  ===================================== */
+
+  if (profileLoading) {
+    return (
+      <Panel
+        id={id}
+        className="step-panel"
+      >
+        <PanelHeader>STEP CHALLENGE</PanelHeader>
+
+        <style>
+          {`
+            @keyframes stepLoaderSpin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+
+            @keyframes stepLoaderPulse {
+              0%, 100% {
+                opacity: 0.45;
+                transform: scale(0.96);
+              }
+              50% {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+
+            @keyframes stepLoaderFade {
+              from {
+                opacity: 0;
+                transform: translateY(8px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          `}
+        </style>
+
+        <div style={{
+          minHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          animation: 'stepLoaderFade 0.5s ease both',
+        }}>
+          <div style={{
+            width: '78px',
+            height: '78px',
+            borderRadius: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#c8f36d',
+            color: '#18251d',
+            fontSize: '38px',
+            fontWeight: 900,
+            boxShadow: '0 12px 40px rgba(150, 190, 70, 0.2)',
+            animation: 'stepLoaderPulse 1.8s ease-in-out infinite',
+          }}>
+            S
+          </div>
+
+          <div style={{
+            width: '30px',
+            height: '30px',
+            marginTop: '30px',
+            border: '3px solid rgba(120, 140, 100, 0.18)',
+            borderTopColor: '#8bbd3c',
+            borderRadius: '50%',
+            animation: 'stepLoaderSpin 0.8s linear infinite',
+          }} />
+
+          <h2 style={{
+            margin: '22px 0 7px',
+            fontSize: '21px',
+            fontWeight: 800,
+          }}>
+            STEP CHALLENGE
+          </h2>
+
+          <p style={{
+            margin: 0,
+            fontSize: '13px',
+            opacity: 0.65,
+          }}>
+            Загружаем твой профиль VK...
+          </p>
+        </div>
+      </Panel>
+    );
+  }
 
 
   /* =====================================
@@ -1450,7 +2321,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ===================================== */
 
   return (
-    <Panel id={id} className="step-panel">
+    <Panel
+      id={id}
+      className="step-panel"
+    >
       <PanelHeader>STEP CHALLENGE</PanelHeader>
 
       <div className="step-page">
@@ -1484,6 +2358,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         {activeTab === 'submit' && renderSubmit()}
         {activeTab === 'rating' && renderRating()}
         {activeTab === 'profile' && renderProfile()}
+        {activeTab === 'moderation' && (
+          isModerator
+            ? renderModeration()
+            : renderProfile()
+        )}
 
         <nav className="step-bottom-nav">
           <button
@@ -1506,7 +2385,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
           <button
             type="button"
-            className={activeTab === 'profile' ? 'active' : ''}
+            className={
+              activeTab === 'profile' ||
+              activeTab === 'moderation'
+                ? 'active'
+                : ''
+            }
             onClick={() => setActiveTab('profile')}
           >
             <span className="step-nav-icon">♙</span>
