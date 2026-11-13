@@ -315,6 +315,15 @@ export async function submitStepsResult(payload) {
 
   if (!result?.ok) {
     const messages = {
+      image_base64_decode_failed:
+        'Ошибка декодирования изображения. Попробуй сохранить скриншот заново.',
+
+      image_signature_mismatch:
+        'Формат изображения не совпадает с содержимым файла. Попробуй сделать новый скриншот.',
+
+      invalid_image_data:
+        'Не удалось прочитать изображение.',
+        
       server_not_configured:
         'Не настроены параметры VK в Apps Script.',
 
