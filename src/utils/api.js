@@ -5,10 +5,37 @@ let callbackCounter = 0;
 
 
 /* =====================================
+   ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+===================================== */
+
+function createRequestId() {
+  const bytes = new Uint8Array(16);
+
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes)
+      .map(value => value.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  return (
+    Date.now().toString(36) +
+    Math.random().toString(36).slice(2) +
+    Math.random().toString(36).slice(2)
+  );
+}
+
+
+/* =====================================
    GET: JSONP
 ===================================== */
 
-export function getGasJsonp(action, params = {}, timeoutMs = 90000) {
+export function getGasJsonp(
+  action,
+  params = {},
+  timeoutMs = 90000
+) {
   return new Promise((resolve, reject) => {
     const callbackName =
       `__stepChallengeCallback${Date.now()}${++callbackCounter}`;
@@ -43,7 +70,9 @@ export function getGasJsonp(action, params = {}, timeoutMs = 90000) {
       cleanup();
 
       reject(
-        new Error('Не удалось подключиться к Google Apps Script')
+        new Error(
+          'Не удалось подключиться к Google Apps Script'
+        )
       );
     };
 
@@ -51,7 +80,9 @@ export function getGasJsonp(action, params = {}, timeoutMs = 90000) {
       cleanup();
 
       reject(
-        new Error('Превышено время ожидания ответа Google Apps Script')
+        new Error(
+          'Превышено время ожидания ответа Google Apps Script'
+        )
       );
     }, timeoutMs);
 
@@ -64,16 +95,19 @@ export function getGasJsonp(action, params = {}, timeoutMs = 90000) {
 
 
 /* =====================================
-   POST: СКРЫТАЯ HTML-ФОРМА + IFRAME
+   POST: HTML-ФОРМА + IFRAME
 ===================================== */
 
 function sendGasForm(payload, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
-    const requestId =
+    const requestId = createRequestId();
+
+    const iframeName =
       `stepChallengeFrame${Date.now()}${++callbackCounter}`;
 
     const iframe = document.createElement('iframe');
-    iframe.name = requestId;
+
+    iframe.name = iframeName;
     iframe.style.display = 'none';
     iframe.setAttribute('aria-hidden', 'true');
 
@@ -81,7 +115,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
 
     form.method = 'POST';
     form.action = API_URL;
-    form.target = requestId;
+    form.target = iframeName;
     form.acceptCharset = 'UTF-8';
     form.style.display = 'none';
 
@@ -99,12 +133,27 @@ function sendGasForm(payload, timeoutMs = 30000) {
       form.appendChild(input);
     });
 
+    // Уникальный ID позволяет связать ответ
+    // именно с текущим запросом.
+    const requestInput = document.createElement('input');
+
+    requestInput.type = 'hidden';
+    requestInput.name = '_request_id';
+    requestInput.value = requestId;
+
+    form.appendChild(requestInput);
+
     let finished = false;
     let timeout;
 
     const cleanup = () => {
       clearTimeout(timeout);
-      window.removeEventListener('message', handleMessage);
+
+      window.removeEventListener(
+        'message',
+        handleMessage
+      );
+
       form.remove();
       iframe.remove();
     };
@@ -120,10 +169,6 @@ function sendGasForm(payload, timeoutMs = 30000) {
     };
 
     const handleMessage = event => {
-      if (event.source !== iframe.contentWindow) {
-        return;
-      }
-
       const message = event.data;
 
       if (
@@ -133,10 +178,19 @@ function sendGasForm(payload, timeoutMs = 30000) {
         return;
       }
 
+      // Не проверяем event.source:
+      // HTML Service Apps Script использует iframe-песочницу.
+      // Вместо этого сверяем уникальный ID запроса.
+      if (message.requestId !== requestId) {
+        return;
+      }
+
       if (!message.data || typeof message.data !== 'object') {
         finish(
           reject,
-          new Error('Google Apps Script вернул некорректный ответ.')
+          new Error(
+            'Google Apps Script вернул некорректный ответ.'
+          )
         );
 
         return;
@@ -145,13 +199,16 @@ function sendGasForm(payload, timeoutMs = 30000) {
       finish(resolve, message.data);
     };
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener(
+      'message',
+      handleMessage
+    );
 
     timeout = setTimeout(() => {
       finish(
         reject,
         new Error(
-          'Google Apps Script не ответил на POST-запрос. Проверь веб-развёртывание.'
+          'Google Apps Script запустил обработчик, но ответ не получен. Проверь версию веб-развёртывания.'
         )
       );
     }, timeoutMs);
@@ -161,11 +218,13 @@ function sendGasForm(payload, timeoutMs = 30000) {
 
     try {
       form.submit();
+
     } catch (error) {
       finish(
         reject,
         new Error(
-          'Не удалось отправить POST-запрос: ' + error.message
+          'Не удалось отправить POST-запрос: ' +
+          error.message
         )
       );
     }
@@ -178,17 +237,26 @@ function sendGasForm(payload, timeoutMs = 30000) {
 ===================================== */
 
 export async function postGasForm(payload) {
-  const userId = String(payload.vk_user_id || '');
+  const userId = String(
+    payload.vk_user_id || ''
+  );
 
   if (!/^\d+$/.test(userId)) {
-    throw new Error('Некорректный VK ID пользователя');
+    throw new Error(
+      'Некорректный VK ID пользователя'
+    );
   }
 
   if (payload.action !== 'register') {
-    throw new Error('Неизвестная операция регистрации');
+    throw new Error(
+      'Неизвестная операция регистрации'
+    );
   }
 
-  const result = await sendGasForm(payload, 30000);
+  const result = await sendGasForm(
+    payload,
+    30000
+  );
 
   if (!result?.ok) {
     throw new Error(
@@ -201,7 +269,8 @@ export async function postGasForm(payload) {
 
   return {
     ...result,
-    registeredCount: Number(stats?.registeredCount) || 0,
+    registeredCount:
+      Number(stats?.registeredCount) || 0,
   };
 }
 
@@ -211,21 +280,29 @@ export async function postGasForm(payload) {
 ===================================== */
 
 export async function submitStepsResult(payload) {
-  const userId = String(payload.vk_user_id || '');
+  const userId = String(
+    payload.vk_user_id || ''
+  );
 
   if (!/^\d+$/.test(userId)) {
-    throw new Error('Не удалось определить VK ID пользователя');
+    throw new Error(
+      'Не удалось определить VK ID пользователя'
+    );
   }
 
   if (payload.action !== 'submit_result') {
-    throw new Error('Неизвестная операция отправки результата');
+    throw new Error(
+      'Неизвестная операция отправки результата'
+    );
   }
 
   if (!payload.image_base64) {
     throw new Error('Не выбран скриншот');
   }
 
-  if (String(payload.image_base64).length > 5800000) {
+  if (
+    String(payload.image_base64).length > 5800000
+  ) {
     throw new Error(
       'Скриншот слишком большой. Максимальный размер — 4 МБ.'
     );
@@ -236,7 +313,10 @@ export async function submitStepsResult(payload) {
     ...postPayload
   } = payload;
 
-  const result = await sendGasForm(postPayload, 90000);
+  const result = await sendGasForm(
+    postPayload,
+    90000
+  );
 
   if (!result?.ok) {
     const messages = {
@@ -272,6 +352,12 @@ export async function submitStepsResult(payload) {
 
       invalid_image_data:
         'Не удалось прочитать изображение.',
+
+      database_not_configured:
+        'Не настроена Google Таблица.',
+
+      sheet_not_found:
+        'Не найден необходимый лист Google Таблицы.',
     };
 
     throw new Error(
@@ -311,7 +397,9 @@ export async function submitStepsResult(payload) {
    ОЧЕРЕДЬ МОДЕРАЦИИ
 ===================================== */
 
-export async function getModerationQueue(signedLaunchParams) {
+export async function getModerationQueue(
+  signedLaunchParams
+) {
   const result = await getGasJsonp(
     'moderation_queue',
     signedLaunchParams
@@ -341,7 +429,7 @@ export async function getModerationQueue(signedLaunchParams) {
 
 
 /* =====================================
-   ЗАГРУЗКА ИЗОБРАЖЕНИЯ ДЛЯ МОДЕРАТОРА
+   ЗАГРУЗКА СКРИНШОТА МОДЕРАТОРОМ
 ===================================== */
 
 export async function getModerationImage(
@@ -381,9 +469,13 @@ export async function moderateSubmission(payload) {
   }
 
   if (
-    !['Одобрено', 'Отклонено'].includes(payload.decision)
+    !['Одобрено', 'Отклонено'].includes(
+      payload.decision
+    )
   ) {
-    throw new Error('Не выбрано решение модератора.');
+    throw new Error(
+      'Не выбрано решение модератора.'
+    );
   }
 
   const result = await sendGasForm(
