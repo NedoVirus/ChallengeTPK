@@ -21,7 +21,6 @@ function createRequestId() {
 
   return (
     Date.now().toString(36) +
-    Math.random().toString(36).slice(2) +
     Math.random().toString(36).slice(2)
   );
 }
@@ -29,12 +28,13 @@ function createRequestId() {
 
 /* =====================================
    GET: JSONP
+   Тайм-аут по умолчанию — 15 секунд.
 ===================================== */
 
 export function getGasJsonp(
   action,
   params = {},
-  timeoutMs = 90000
+  timeoutMs = 15000
 ) {
   return new Promise((resolve, reject) => {
     const callbackName =
@@ -81,7 +81,7 @@ export function getGasJsonp(
 
       reject(
         new Error(
-          'Превышено время ожидания ответа Google Apps Script'
+          'Google Apps Script не ответил за 15 секунд. Проверь подключение и журнал выполнений.'
         )
       );
     }, timeoutMs);
@@ -133,8 +133,6 @@ function sendGasForm(payload, timeoutMs = 30000) {
       form.appendChild(input);
     });
 
-    // Уникальный ID позволяет связать ответ
-    // именно с текущим запросом.
     const requestInput = document.createElement('input');
 
     requestInput.type = 'hidden';
@@ -178,9 +176,6 @@ function sendGasForm(payload, timeoutMs = 30000) {
         return;
       }
 
-      // Не проверяем event.source:
-      // HTML Service Apps Script использует iframe-песочницу.
-      // Вместо этого сверяем уникальный ID запроса.
       if (message.requestId !== requestId) {
         return;
       }
@@ -208,7 +203,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
       finish(
         reject,
         new Error(
-          'Google Apps Script запустил обработчик, но ответ не получен. Проверь версию веб-развёртывания.'
+          'Google Apps Script не ответил на POST-запрос. Проверь версию веб-развёртывания.'
         )
       );
     }, timeoutMs);
@@ -355,9 +350,6 @@ export async function submitStepsResult(payload) {
 
       database_not_configured:
         'Не настроена Google Таблица.',
-
-      sheet_not_found:
-        'Не найден необходимый лист Google Таблицы.',
     };
 
     throw new Error(
