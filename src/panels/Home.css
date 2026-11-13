@@ -7,7 +7,7 @@
   max-width: 850px;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 16px 20px 30px;
+  padding: 16px 20px calc(125px + env(safe-area-inset-bottom, 0px));
   color: var(--vkui--color_text_primary, #181b22);
   background: var(--vkui--color_background, #f4f5f7);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -486,12 +486,39 @@
 }
 
 .step-day-status {
+  flex-shrink: 0;
+  max-width: 112px;
+  text-align: center;
   border-radius: 20px;
   padding: 6px 10px;
   background: var(--vkui--color_background_secondary, #f0f1f3);
   color: var(--vkui--color_text_secondary, #818794);
   font-size: 10px;
   font-weight: 700;
+}
+
+.step-day-status.status-pending {
+  background: #fff3d7;
+  color: #946300;
+}
+
+.step-day-status.status-approved {
+  background: #e2f5e7;
+  color: #247a43;
+}
+
+.step-day-status.status-rejected {
+  background: #ffe7e5;
+  color: #b43b32;
+}
+
+.step-day-moderator-comment {
+  display: block;
+  margin-top: 3px;
+  color: #b43b32 !important;
+  font-size: 11px !important;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* RULES */
@@ -665,17 +692,24 @@
 /* BOTTOM NAVIGATION */
 
 .step-bottom-nav {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
-  margin-top: 35px;
+  width: min(810px, calc(100vw - 26px));
+  box-sizing: border-box;
+  margin: 0;
   padding: 10px;
   border: 1px solid var(--vkui--color_separator_primary, rgba(0, 0, 0, 0.07));
   border-radius: 18px;
   background: var(--vkui--color_background_content, #fff);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .step-bottom-nav button {
@@ -728,7 +762,7 @@
 
 @media (max-width: 600px) {
   .step-page {
-    padding: 12px 13px 25px;
+    padding: 12px 13px calc(125px + env(safe-area-inset-bottom, 0px));
   }
 
   .step-header {
@@ -793,7 +827,7 @@
   }
 
   .step-bottom-nav {
-    margin-top: 25px;
+    margin-top: 0;
   }
 }
 

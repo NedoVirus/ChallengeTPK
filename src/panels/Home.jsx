@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Panel, PanelHeader } from '@vkontakte/vkui';
 import PropTypes from 'prop-types';
-
 import {
   getGasJsonp,
   postGasForm,
@@ -10,9 +9,7 @@ import {
   getModerationImage,
   moderateSubmission,
 } from '../utils/api';
-
 import './Home.css';
-
 
 const MODERATOR_VK_ID = '620583350';
 
@@ -55,59 +52,41 @@ const ALLOWED_IMAGE_TYPES = [
 const ERROR_MESSAGES = {
   server_not_configured:
     'Не настроены VK_APP_ID или VK_APP_SECRET в Apps Script.',
-
   vk_signature_missing:
     'Отсутствует подпись запуска VK. Открой приложение через VK.',
-
   vk_params_missing:
     'Не удалось получить параметры запуска VK.',
-
   invalid_vk_app_id:
     'ID приложения VK не совпадает с настройками сервера.',
-
   invalid_vk_user_id:
     'Не удалось определить пользователя VK.',
-
   invalid_vk_signature:
     'VK не подтвердил подлинность запуска. Перезапусти приложение.',
-
   unknown_action:
     'Неизвестная операция сервера.',
-
   participant_not_registered:
     'Сначала необходимо зарегистрироваться в челлендже.',
-
   invalid_challenge_date:
     'Выбрана дата вне периода челленджа.',
-
   future_challenge_date:
     'Результат за этот день пока нельзя отправить.',
-
   challenge_not_active:
     'Челлендж не активен на выбранную дату.',
-
   invalid_steps:
     'Укажи количество шагов от 1 до 100 000.',
-
   invalid_image_type:
     'Можно загрузить только JPG, PNG или WEBP.',
-
   invalid_image_size:
     'Размер скриншота не должен превышать 4 МБ.',
-
   invalid_image_data:
     'Не удалось прочитать изображение. Выбери скриншот ещё раз.',
-
   moderator_access_denied:
     'У этого аккаунта нет доступа к модерации.',
-
   submission_not_found:
     'Заявка не найдена.',
-
   submission_already_reviewed:
     'Эта заявка уже была проверена.',
 };
-
 
 /* =====================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -182,7 +161,6 @@ function convertImageToJpegDataUrl(file) {
           };
 
           reader.readAsDataURL(blob);
-
         }, 'image/jpeg', 0.95);
 
       } catch (error) {
@@ -202,6 +180,7 @@ function convertImageToJpegDataUrl(file) {
     image.src = objectUrl;
   });
 }
+
 function formatDateTime(value) {
   if (!value) {
     return '';
@@ -222,11 +201,9 @@ function formatDateTime(value) {
   });
 }
 
-
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('ru-RU');
 }
-
 
 /* =====================================
    ОСНОВНОЙ КОМПОНЕНТ
@@ -262,6 +239,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [lastSubmission, setLastSubmission] = useState(null);
   const [submissionStatusLoading, setSubmissionStatusLoading] = useState(false);
 
+  // Статусы всех пяти дней для главной страницы.
+  const [homeSubmissions, setHomeSubmissions] = useState({});
+  const [homeSubmissionsLoading, setHomeSubmissionsLoading] = useState(false);
+
   // Рейтинг.
   const [ratingRows, setRatingRows] = useState([]);
   const [ratingLoading, setRatingLoading] = useState(false);
@@ -280,7 +261,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const rulesRef = useRef(null);
   const fileInputRef = useRef(null);
 
-
   const {
     photo_200,
     city,
@@ -288,10 +268,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     last_name,
   } = fetchedUser || {};
 
-
   const fullName =
     [first_name, last_name].filter(Boolean).join(' ') || 'Участник';
-
 
   const initials = [
     first_name?.[0],
@@ -301,11 +279,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     .join('')
     .toUpperCase() || 'S';
 
-
   const userId = launchParams?.vk_user_id
     ? String(launchParams.vk_user_id)
     : '';
-
 
   const hasSignedLaunchParams = Boolean(
     launchParams?.vk_user_id &&
@@ -313,9 +289,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     launchParams?.sign
   );
 
-
   const isModerator = userId === MODERATOR_VK_ID;
-
 
   const signedLaunchParams = Object.fromEntries(
     Object.entries(launchParams || {}).filter(
@@ -325,7 +299,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         value !== null
     )
   );
-
 
   /* =====================================
      ЗАГРУЗКА ПРОФИЛЯ VK
@@ -362,7 +335,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     photo_200,
   ]);
 
-
   /* =====================================
      ОСВОБОЖДЕНИЕ ПРЕДПРОСМОТРА ФАЙЛА
   ===================================== */
@@ -374,7 +346,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       }
     };
   }, [screenshotPreview]);
-
 
   /* =====================================
      ЗАГРУЗКА КОЛИЧЕСТВА УЧАСТНИКОВ
@@ -402,7 +373,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       active = false;
     };
   }, []);
-
 
   /* =====================================
      ПРОВЕРКА РЕГИСТРАЦИИ
@@ -467,7 +437,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     hasSignedLaunchParams,
   ]);
 
-
   /* =====================================
      СТАТУС РЕЗУЛЬТАТА
   ===================================== */
@@ -530,6 +499,72 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     moderationReloadKey,
   ]);
 
+  /* =====================================
+     СТАТУСЫ ВСЕХ ДНЕЙ НА ГЛАВНОЙ
+  ===================================== */
+
+  useEffect(() => {
+    let active = true;
+
+    if (
+      activeTab !== 'home' ||
+      !hasSignedLaunchParams ||
+      !isRegistered
+    ) {
+      setHomeSubmissions({});
+      setHomeSubmissionsLoading(false);
+
+      return () => {
+        active = false;
+      };
+    }
+
+    setHomeSubmissionsLoading(true);
+
+    Promise.all(
+      CHALLENGE_DAYS.map(async day => {
+        try {
+          const data = await getGasJsonp('submission_status', {
+            ...signedLaunchParams,
+            challenge_date: day.value,
+          });
+
+          return [
+            day.value,
+            data?.ok && data.submitted ? data.submission : null,
+          ];
+        } catch (error) {
+          console.warn(
+            `Не удалось загрузить статус за ${day.value}:`,
+            error
+          );
+
+          return [day.value, null];
+        }
+      })
+    )
+      .then(entries => {
+        if (active) {
+          setHomeSubmissions(Object.fromEntries(entries));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setHomeSubmissionsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    activeTab,
+    hasSignedLaunchParams,
+    isRegistered,
+    userId,
+    launchParams,
+    moderationReloadKey,
+  ]);
 
   /* =====================================
      ЗАГРУЗКА РЕЙТИНГА
@@ -568,7 +603,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       active = false;
     };
   }, [activeTab]);
-
 
   /* =====================================
      ЗАГРУЗКА ОЧЕРЕДИ МОДЕРАЦИИ
@@ -628,7 +662,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     launchParams,
   ]);
 
-
   /* =====================================
      РЕГИСТРАЦИЯ
   ===================================== */
@@ -653,9 +686,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     try {
       const registrationData = {
         action: 'register',
-
         ...signedLaunchParams,
-
         first_name: first_name || '',
         last_name: last_name || '',
         photo_200: photo_200 || '',
@@ -700,14 +731,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
-
   const showRules = () => {
     rulesRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     });
   };
-
 
   /* =====================================
      СКРИНШОТ
@@ -725,7 +754,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       fileInputRef.current.value = '';
     }
   };
-
 
   const handleScreenshotChange = event => {
     const file = event.target.files?.[0];
@@ -766,7 +794,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setSubmissionMessage('');
     setSubmissionMessageType('');
   };
-
 
   /* =====================================
      ОТПРАВКА РЕЗУЛЬТАТА
@@ -855,19 +882,14 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
       const result = await submitStepsResult({
         action: 'submit_result',
-
         ...signedLaunchParams,
-
         signed_launch_params: signedLaunchParams,
-
         challenge_date: resultDate,
         steps,
-
         phone_time: new Date().toLocaleTimeString('ru-RU', {
           hour: '2-digit',
           minute: '2-digit',
         }),
-
         file_name: screenshotFile.name,
         mime_type: 'image/jpeg',
         image_base64: base64,
@@ -913,7 +935,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       setSubmissionBusy(false);
     }
   };
-
 
   /* =====================================
      МОДЕРАЦИЯ: ЗАГРУЗИТЬ СКРИНШОТ
@@ -965,7 +986,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
-
   /* =====================================
      МОДЕРАЦИЯ: КОММЕНТАРИЙ
   ===================================== */
@@ -979,7 +999,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       [submissionId]: value,
     }));
   };
-
 
   /* =====================================
      МОДЕРАЦИЯ: РЕШЕНИЕ
@@ -1015,7 +1034,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     try {
       const result = await moderateSubmission({
         ...signedLaunchParams,
-
         submission_id: submission.id,
         decision,
         comment,
@@ -1065,7 +1083,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       setModerationBusyId('');
     }
   };
-
 
   /* =====================================
      ГЛАВНАЯ СТРАНИЦА
@@ -1184,7 +1201,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
       </section>
 
-
       <section className="step-section">
         <div className="step-section-heading">
           <div>
@@ -1221,7 +1237,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <span>↗</span>
         </button>
       </section>
-
 
       <section className="step-section">
         <div className="step-section-heading">
@@ -1265,7 +1280,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
       </section>
 
-
       <section className="step-info-grid">
         <div className="step-info-card">
           <div className="step-info-icon green">◷</div>
@@ -1292,7 +1306,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
       </section>
 
-
       <section className="step-section">
         <div className="step-section-heading">
           <div>
@@ -1313,14 +1326,50 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 <span>Цель — 10 000 шагов</span>
               </div>
 
-              <span className="step-day-status">
-                День {day.number}
-              </span>
+              <div className="step-day-status" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: '4px',
+                maxWidth: '48%',
+                textAlign: 'right',
+              }}>
+                {homeSubmissionsLoading ? (
+                  <span>Загрузка...</span>
+                ) : homeSubmissions[day.value] ? (
+                  <>
+                    <span style={{
+                      color: homeSubmissions[day.value].status === 'Одобрено'
+                        ? '#247a43'
+                        : homeSubmissions[day.value].status === 'Отклонено'
+                          ? '#c34b43'
+                          : '#9a751c',
+                      fontWeight: 700,
+                    }}>
+                      {homeSubmissions[day.value].status || 'На проверке'}
+                    </span>
+
+                    {homeSubmissions[day.value].status === 'Отклонено' &&
+                      homeSubmissions[day.value].comment && (
+                        <span style={{
+                          color: '#c34b43',
+                          fontSize: '11px',
+                          lineHeight: 1.35,
+                          whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
+                        }}>
+                          {homeSubmissions[day.value].comment}
+                        </span>
+                      )}
+                  </>
+                ) : (
+                  <span>День {day.number}</span>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </section>
-
 
       <section
         className="step-section step-rules-section"
@@ -1382,7 +1431,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       </section>
     </>
   );
-
 
   /* =====================================
      СТРАНИЦА ОТПРАВКИ РЕЗУЛЬТАТА
@@ -1463,7 +1511,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           </span>
         </div>
 
-
         <label style={{
           display: 'block',
           fontWeight: 600,
@@ -1503,7 +1550,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           ))}
         </select>
 
-
         <label
           htmlFor="step-result-count"
           style={{
@@ -1538,7 +1584,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           }}
         />
 
-
         <label style={{
           display: 'block',
           fontWeight: 600,
@@ -1567,7 +1612,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         }}>
           JPG, PNG или WEBP. Максимальный размер — 4 МБ.
         </p>
-
 
         {screenshotPreview && (
           <div style={{
@@ -1607,7 +1651,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           </div>
         )}
 
-
         {submissionStatusLoading && (
           <p style={{
             fontSize: '13px',
@@ -1617,7 +1660,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             Проверяем, отправлялся ли результат за этот день...
           </p>
         )}
-
 
         {lastSubmission && (
           <div style={{
@@ -1666,7 +1708,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           </div>
         )}
 
-
         {submissionMessage && (
           <p
             role="status"
@@ -1684,7 +1725,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             {submissionMessage}
           </p>
         )}
-
 
         <button
           type="button"
@@ -1708,7 +1748,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               ? lastSubmission.status === 'Одобрено'
                 ? 'Результат одобрен'
                 : 'Уже на проверке'
-              : 'Отправить на проверку'}
+              : lastSubmission?.status === 'Отклонено'
+                ? 'Отправить исправленный результат'
+                : 'Отправить на проверку'}
 
           {!submissionBusy && !hasPendingOrApproved && (
             <span>↗</span>
@@ -1727,7 +1769,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       </section>
     );
   };
-
 
   /* =====================================
      СТРАНИЦА МОДЕРАЦИИ
@@ -1764,7 +1805,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         результаты и оставляй комментарии.
       </p>
 
-
       {moderationMessage && (
         <div style={{
           padding: '12px',
@@ -1777,7 +1817,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           {moderationMessage}
         </div>
       )}
-
 
       {moderationError && (
         <div
@@ -1795,7 +1834,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
       )}
 
-
       {moderationLoading ? (
         <div className="step-empty-card">
           <p>Загружаем заявки...</p>
@@ -1803,9 +1841,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       ) : moderationSubmissions.length === 0 ? (
         <div className="step-empty-card">
           <div className="step-empty-icon">✓</div>
-
           <h2>Очередь пуста</h2>
-
           <p>
             Сейчас нет заявок, ожидающих проверки.
           </p>
@@ -1909,7 +1945,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                   </span>
                 </div>
 
-
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
@@ -1970,7 +2005,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                   </div>
                 </div>
 
-
                 {!image && (
                   <button
                     type="button"
@@ -1995,7 +2029,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                   </button>
                 )}
 
-
                 {image && (
                   <div style={{
                     marginTop: '14px',
@@ -2014,7 +2047,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                     />
                   </div>
                 )}
-
 
                 <label
                   htmlFor={`moderation-comment-${submission.id}`}
@@ -2054,7 +2086,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                     fontSize: '13px',
                   }}
                 />
-
 
                 <div style={{
                   display: 'grid',
@@ -2123,7 +2154,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </section>
   );
 
-
   /* =====================================
      РЕЙТИНГ
   ===================================== */
@@ -2187,7 +2217,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </section>
   );
 
-
   /* =====================================
      ПРОФИЛЬ
   ===================================== */
@@ -2244,7 +2273,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         </div>
       </div>
 
-
       {isModerator && (
         <div style={{
           marginTop: '18px',
@@ -2290,7 +2318,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       )}
     </section>
   );
-
 
   /* =====================================
      ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
@@ -2394,7 +2421,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     );
   }
 
-
   /* =====================================
      ОСНОВНОЙ ИНТЕРФЕЙС
   ===================================== */
@@ -2437,6 +2463,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         {activeTab === 'submit' && renderSubmit()}
         {activeTab === 'rating' && renderRating()}
         {activeTab === 'profile' && renderProfile()}
+
         {activeTab === 'moderation' && (
           isModerator
             ? renderModeration()
@@ -2485,7 +2512,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </Panel>
   );
 };
-
 
 Home.propTypes = {
   id: PropTypes.string.isRequired,
