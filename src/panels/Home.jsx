@@ -1032,8 +1032,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 </div>
 
                 <div className="step-goal-number">
-                  {formatNumber(TOTAL_GOAL)}
-                  <span>шагов</span>
+                  {formatNumber(approvedSteps)}
+                  <span>/ {formatNumber(TOTAL_GOAL)} шагов</span>
                 </div>
 
                 <div className="step-progress-track">
