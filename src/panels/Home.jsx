@@ -2758,7 +2758,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               style={{
                 display: 'block',
                 width: '132px',
-                maxWidth: '42vw',
+                maxWidth: '13vw',
                 height: '48px',
                 objectFit: 'contain',
               }}
