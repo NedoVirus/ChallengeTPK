@@ -259,8 +259,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
      ПРЕДЗАПОЛНЕНИЕ ФОРМЫ ДАННЫМИ VK
   ===================================== */
   useEffect(() => {
-    setRegistrationFirstName(current => current || first_name || '');
-    setRegistrationLastName(current => current || last_name || '');
+    setRegistrationFirstName(
+      current => current || sanitizeRussianName(first_name || '')
+    );
+    setRegistrationLastName(
+      current => current || sanitizeRussianName(last_name || '')
+    );
   }, [first_name, last_name]);
 
   /* =====================================
@@ -295,8 +299,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           setIsRegistered(Boolean(data.registered));
           if (data.registered && data.participant) {
             setRegisteredParticipant(data.participant);
-            setRegistrationFirstName(data.participant.firstName || first_name || '');
-            setRegistrationLastName(data.participant.lastName || last_name || '');
+            setRegistrationFirstName(
+              sanitizeRussianName(data.participant.firstName || first_name || '')
+            );
+            setRegistrationLastName(
+              sanitizeRussianName(data.participant.lastName || last_name || '')
+            );
             setRegistrationGroup(data.participant.group || '');
             setRegistrationFormOpen(false);
           } else {
@@ -467,8 +475,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
     if (isRegistered || registrationBusy || !registrationChecked) return;
 
-    setRegistrationFirstName(current => current || first_name || '');
-    setRegistrationLastName(current => current || last_name || '');
+    setRegistrationFirstName(
+      current => current || sanitizeRussianName(first_name || '')
+    );
+    setRegistrationLastName(
+      current => current || sanitizeRussianName(last_name || '')
+    );
     setRegistrationMessage('');
     setRegistrationMessageType('');
     setRegistrationFormOpen(true);
@@ -1774,7 +1786,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   );
 
   /* =====================================
-     МОДАЛКА РЕГИСТРАЦИИ
+    МОДАЛКА РЕГИСТРАЦИИ
   ===================================== */
   const renderRegistrationModal = () => {
     if (!registrationFormOpen || isRegistered) return null;
@@ -1810,24 +1822,63 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             marginBottom: '14px',
             borderBottom: '1px solid #e8edf0',
           }}>
+            {/* АВАТАР + ГАЛОЧКА ПОДТВЕРЖДЕНИЯ */}
             <div style={{
-              width: '42px', height: '42px', flex: '0 0 42px',
-              overflow: 'hidden', borderRadius: '50%',
-              background: '#e9eff2', display: 'grid',
-              placeItems: 'center', fontWeight: 800, color: '#40515d',
+              position: 'relative',
+              width: '46px',
+              height: '46px',
+              flex: '0 0 46px',
             }}>
-              {photo_200 ? (
-                <img
-                  src={photo_200}
-                  alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : (
-                initials
-              )}
+              <div style={{
+                width: '100%',
+                height: '100%',
+                overflow: 'hidden',
+                borderRadius: '50%',
+                background: '#e9eff2',
+                display: 'grid',
+                placeItems: 'center',
+                fontWeight: 800,
+                color: '#40515d',
+              }}>
+                {photo_200 ? (
+                  <img
+                    src={photo_200}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  initials
+                )}
+              </div>
+
+              <span
+                aria-label="Профиль подтверждён"
+                title="Профиль ВКонтакте подтверждён"
+                style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  bottom: '-2px',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  background: '#c8f36d',
+                  color: '#1f3a10',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  pointerEvents: 'none',
+                }}
+              >
+                ✓
+              </span>
             </div>
 
-            <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ minWidth: 0, flex: 1, paddingRight: '28px' }}>
               <strong style={{ display: 'block', fontSize: '13px' }}>
                 Профиль ВКонтакте подключён
               </strong>
@@ -1838,14 +1889,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 Подтверждённый VK ID: {userId}
               </span>
             </div>
-
-            <span style={{
-              padding: '5px 8px', borderRadius: '20px',
-              background: '#e7f7eb', color: '#238044',
-              fontSize: '10px', fontWeight: 800, whiteSpace: 'nowrap',
-            }}>
-              ✓ Подключён
-            </span>
           </div>
 
           <h3
