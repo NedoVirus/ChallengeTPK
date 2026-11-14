@@ -67,6 +67,8 @@ const ERROR_MESSAGES = {
     'Неизвестная операция сервера.',
   participant_not_registered:
     'Сначала необходимо зарегистрироваться в челлендже.',
+  participant_disqualified:
+    'Ты дисквалифицирован. Отправка новых результатов недоступна.',
   invalid_challenge_date:
     'Выбрана дата вне периода челленджа.',
   future_challenge_date:
@@ -95,6 +97,7 @@ const ERROR_MESSAGES = {
     'Укажи номер группы цифрами.',
 };
 
+
 /* =====================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 ===================================== */
@@ -116,6 +119,7 @@ function readFileAsDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
+
 
 function convertImageToJpegDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -188,6 +192,7 @@ function convertImageToJpegDataUrl(file) {
   });
 }
 
+
 function formatDateTime(value) {
   if (!value) {
     return '';
@@ -208,9 +213,11 @@ function formatDateTime(value) {
   });
 }
 
+
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('ru-RU');
 }
+
 
 /* =====================================
    ОСНОВНОЙ КОМПОНЕНТ
@@ -325,6 +332,20 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     )
   );
 
+  // Статус участника.
+  // Если старый ответ сервера не содержит статус,
+  // считаем зарегистрированного участника active.
+  const participantStatus =
+    String(registeredParticipant?.status || 'active')
+      .trim()
+      .toLowerCase() === 'disqualified'
+      ? 'disqualified'
+      : 'active';
+
+  const isDisqualified =
+    isRegistered && participantStatus === 'disqualified';
+
+
   /* =====================================
      ЗАГРУЗКА ПРОФИЛЯ VK
   ===================================== */
@@ -360,6 +381,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     photo_200,
   ]);
 
+
   /* =====================================
      ОСВОБОЖДЕНИЕ ПРЕДПРОСМОТРА ФАЙЛА
   ===================================== */
@@ -371,6 +393,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       }
     };
   }, [screenshotPreview]);
+
 
   /* =====================================
      ЗАГРУЗКА КОЛИЧЕСТВА УЧАСТНИКОВ
@@ -399,6 +422,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     };
   }, []);
 
+
   /* =====================================
      ПРЕДЗАПОЛНЕНИЕ ФОРМЫ ДАННЫМИ VK
   ===================================== */
@@ -407,6 +431,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setRegistrationFirstName(current => current || first_name || '');
     setRegistrationLastName(current => current || last_name || '');
   }, [first_name, last_name]);
+
 
   /* =====================================
      ПРОВЕРКА РЕГИСТРАЦИИ
@@ -449,6 +474,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
             setRegistrationGroup(data.participant.group || '');
             setRegistrationFormOpen(false);
+          } else {
+            setRegisteredParticipant(null);
           }
         } else {
           setRegistrationMessage(
@@ -487,6 +514,64 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     first_name,
     last_name,
   ]);
+
+
+  /* =====================================
+     ОБНОВЛЕНИЕ СТАТУСА УЧАСТНИКА
+  ===================================== */
+
+  useEffect(() => {
+    let active = true;
+
+    // На главной не делаем повторный запрос,
+    // чтобы не мешать регистрации.
+    // При переходе в профиль, рейтинг или отправку
+    // заново получаем актуальный статус из базы.
+    if (
+      !registrationChecked ||
+      !hasSignedLaunchParams ||
+      !userId ||
+      activeTab === 'home' ||
+      activeTab === 'moderation'
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+
+    getGasJsonp('participant', {
+      vk_user_id: userId,
+    })
+      .then(data => {
+        if (!active || !data?.ok) {
+          return;
+        }
+
+        setIsRegistered(Boolean(data.registered));
+
+        setRegisteredParticipant(
+          data.registered
+            ? data.participant || null
+            : null
+        );
+      })
+      .catch(error => {
+        console.warn(
+          'Не удалось обновить статус участника:',
+          error
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    activeTab,
+    registrationChecked,
+    hasSignedLaunchParams,
+    userId,
+  ]);
+
 
   /* =====================================
      СТАТУС РЕЗУЛЬТАТА
@@ -549,6 +634,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     launchParams,
     moderationReloadKey,
   ]);
+
 
   /* =====================================
      СТАТУСЫ ПЯТИ ДНЕЙ НА ГЛАВНОЙ
@@ -620,6 +706,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     moderationReloadKey,
   ]);
 
+
   /* =====================================
      ЗАГРУЗКА РЕЙТИНГА
   ===================================== */
@@ -657,6 +744,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       active = false;
     };
   }, [activeTab]);
+
 
   /* =====================================
      ЗАГРУЗКА ОЧЕРЕДИ МОДЕРАЦИИ
@@ -716,9 +804,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     launchParams,
   ]);
 
+
   /* =====================================
      РЕГИСТРАЦИЯ
-===================================== */
+  ===================================== */
 
   const openRegistrationForm = () => {
     if (!hasSignedLaunchParams) {
@@ -740,6 +829,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setRegistrationMessageType('');
     setRegistrationFormOpen(true);
   };
+
 
   const handleRegister = async event => {
     event?.preventDefault();
@@ -808,6 +898,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         firstName: cleanFirstName,
         lastName: cleanLastName,
         group: cleanGroup,
+        status: 'active',
       };
 
       setRegisteredParticipant(participant);
@@ -843,9 +934,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
+
   /* =====================================
      СКРИНШОТ
-===================================== */
+  ===================================== */
 
   const removeScreenshot = () => {
     if (screenshotPreview) {
@@ -859,6 +951,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       fileInputRef.current.value = '';
     }
   };
+
 
   const handleScreenshotChange = event => {
     const file = event.target.files?.[0];
@@ -900,9 +993,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setSubmissionMessageType('');
   };
 
+
   /* =====================================
      ОТПРАВКА РЕЗУЛЬТАТА
-===================================== */
+  ===================================== */
 
   const handleSubmitResult = async () => {
     if (!hasSignedLaunchParams) {
@@ -917,6 +1011,17 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     if (!isRegistered) {
       setSubmissionMessage(
         'Сначала зарегистрируйся в челлендже.'
+      );
+
+      setSubmissionMessageType('error');
+      return;
+    }
+
+    // Дополнительная проверка на клиенте.
+    // Главная проверка всё равно выполняется на сервере.
+    if (isDisqualified) {
+      setSubmissionMessage(
+        'Ты дисквалифицирован. Отправка новых результатов недоступна.'
       );
 
       setSubmissionMessageType('error');
@@ -1046,9 +1151,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
+
   /* =====================================
      МОДЕРАЦИЯ: ЗАГРУЗИТЬ СКРИНШОТ
-===================================== */
+  ===================================== */
 
   const handleLoadModerationImage = async submissionId => {
     if (moderationImages[submissionId]) {
@@ -1096,9 +1202,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
+
   /* =====================================
      МОДЕРАЦИЯ: КОММЕНТАРИЙ
-===================================== */
+  ===================================== */
 
   const handleModerationCommentChange = (
     submissionId,
@@ -1110,9 +1217,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }));
   };
 
+
   /* =====================================
      МОДЕРАЦИЯ: РЕШЕНИЕ
-===================================== */
+  ===================================== */
 
   const handleModerationDecision = async (
     submission,
@@ -1195,9 +1303,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
+
   /* =====================================
      ГЛАВНАЯ СТРАНИЦА
-===================================== */
+  ===================================== */
 
   const renderHome = () => (
     <>
@@ -1231,20 +1340,25 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               !hasSignedLaunchParams ||
               !registrationChecked ||
               registrationBusy ||
-              isRegistered
+              isRegistered ||
+              isDisqualified
             }
           >
-            {isRegistered
-              ? 'Вы участвуете'
-              : !hasSignedLaunchParams
-                ? 'Откройте через VK'
-                : !registrationChecked
-                  ? 'Проверяем...'
-                  : registrationFormOpen
-                    ? 'Свернуть форму'
-                    : 'Участвовать'}
+            {isDisqualified
+              ? 'Дисквалифицирован'
+              : isRegistered
+                ? 'Вы участвуете'
+                : !hasSignedLaunchParams
+                  ? 'Откройте через VK'
+                  : !registrationChecked
+                    ? 'Проверяем...'
+                    : registrationFormOpen
+                      ? 'Свернуть форму'
+                      : 'Участвовать'}
 
-            <span>{isRegistered ? '✓' : '↗'}</span>
+            <span>
+              {isDisqualified ? '!' : isRegistered ? '✓' : '↗'}
+            </span>
           </button>
 
           {registrationFormOpen && !isRegistered && (
@@ -1343,7 +1457,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 lineHeight: 1.45,
                 color: '#71808b',
               }}>
-                Имя и фамилия подставлены из профиля VK — проверь, если что-то не совпадает с твоими настоящими данными, то участие невозможно и не получиться узнать победителя.
+                Имя и фамилия подставлены из профиля VK — проверь, если что-то не совпадает с твоими настоящими данными, то участие невозможно и не получится узнать победителя.
               </p>
 
               <form onSubmit={handleRegister}>
@@ -1538,10 +1652,34 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               {registrationMessage}
             </p>
           )}
-
         </div>
-
       </section>
+
+      {isDisqualified && (
+        <div
+          role="alert"
+          style={{
+            marginTop: '16px',
+            padding: '15px',
+            borderRadius: '15px',
+            border: '1px solid #f1c7c4',
+            background: '#fff0ef',
+            color: '#a8322b',
+            fontSize: '13px',
+            lineHeight: 1.55,
+          }}
+        >
+          <strong style={{
+            display: 'block',
+            marginBottom: '4px',
+          }}>
+            Участие в челлендже прекращено
+          </strong>
+
+          Ты дисквалифицирован. Отправка новых результатов недоступна.
+          Ранее отправленные заявки и история результатов сохранены.
+        </div>
+      )}
 
       <section className="step-section">
         <div className="step-section-heading">
@@ -1570,11 +1708,17 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             setActiveTab('submit');
             setSubmissionMessage('');
           }}
-          disabled={!isRegistered || !hasSignedLaunchParams}
+          disabled={
+            !isRegistered ||
+            !hasSignedLaunchParams ||
+            isDisqualified
+          }
         >
-          {isRegistered
-            ? 'Загрузить результат'
-            : 'Сначала зарегистрируйся'}
+          {isDisqualified
+            ? 'Отправка недоступна'
+            : isRegistered
+              ? 'Загрузить результат'
+              : 'Сначала зарегистрируйся'}
 
           <span>↗</span>
         </button>
@@ -1752,6 +1896,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </>
   );
 
+
   /* =====================================
      СТРАНИЦА ОТПРАВКИ РЕЗУЛЬТАТА
   ===================================== */
@@ -1799,6 +1944,32 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           Выбери день, укажи общее количество шагов
           и приложи скриншот из Google Fit.
         </p>
+
+        {isDisqualified && (
+          <div
+            role="alert"
+            style={{
+              padding: '15px',
+              margin: '16px 0',
+              borderRadius: '14px',
+              border: '1px solid #f1c7c4',
+              background: '#fff0ef',
+              color: '#a8322b',
+              fontSize: '13px',
+              lineHeight: 1.55,
+            }}
+          >
+            <strong style={{
+              display: 'block',
+              marginBottom: '5px',
+            }}>
+              Ты дисквалифицирован
+            </strong>
+
+            Отправка новых результатов недоступна.
+            Ранее отправленные заявки и история результатов сохранены.
+          </div>
+        )}
 
         <div style={{
           padding: '15px',
@@ -1849,7 +2020,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             setSubmissionMessage('');
             setSubmissionMessageType('');
           }}
-          disabled={submissionBusy}
+          disabled={submissionBusy || isDisqualified}
           style={{
             width: '100%',
             padding: '13px 12px',
@@ -1891,7 +2062,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           placeholder="Например, 12359"
           value={stepsValue}
           onChange={event => setStepsValue(event.target.value)}
-          disabled={submissionBusy}
+          disabled={submissionBusy || isDisqualified}
           style={{
             width: '100%',
             boxSizing: 'border-box',
@@ -1917,7 +2088,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={handleScreenshotChange}
-          disabled={submissionBusy || hasPendingOrApproved}
+          disabled={
+            submissionBusy ||
+            hasPendingOrApproved ||
+            isDisqualified
+          }
           style={{
             width: '100%',
             fontSize: '13px',
@@ -2054,26 +2229,31 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             !hasSignedLaunchParams ||
             submissionBusy ||
             submissionStatusLoading ||
-            hasPendingOrApproved
+            hasPendingOrApproved ||
+            isDisqualified
           }
           style={{
             width: '100%',
             marginTop: '18px',
           }}
         >
-          {submissionBusy
-            ? 'Отправляем...'
-            : hasPendingOrApproved
-              ? lastSubmission.status === 'Одобрено'
-                ? 'Результат одобрен'
-                : 'Уже на проверке'
-              : lastSubmission?.status === 'Отклонено'
-                ? 'Отправить исправленный результат'
-                : 'Отправить на проверку'}
+          {isDisqualified
+            ? 'Отправка недоступна'
+            : submissionBusy
+              ? 'Отправляем...'
+              : hasPendingOrApproved
+                ? lastSubmission.status === 'Одобрено'
+                  ? 'Результат одобрен'
+                  : 'Уже на проверке'
+                : lastSubmission?.status === 'Отклонено'
+                  ? 'Отправить исправленный результат'
+                  : 'Отправить на проверку'}
 
-          {!submissionBusy && !hasPendingOrApproved && (
-            <span>↗</span>
-          )}
+          {!submissionBusy &&
+            !hasPendingOrApproved &&
+            !isDisqualified && (
+              <span>↗</span>
+            )}
         </button>
 
         {!isRegistered && (
@@ -2089,9 +2269,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     );
   };
 
+
   /* =====================================
      СТРАНИЦА МОДЕРАЦИИ
-===================================== */
+  ===================================== */
 
   const renderModeration = () => (
     <section
@@ -2475,202 +2656,237 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </section>
   );
 
-/* =====================================
-   РЕЙТИНГ
-===================================== */
 
-const renderRating = () => {
-  const currentUserRating = ratingRows.find(
-    item => String(item.vkUserId) === String(userId)
-  );
+  /* =====================================
+     РЕЙТИНГ
+  ===================================== */
 
-  const currentUserRatingName = currentUserRating
-    ? [
-        currentUserRating.firstName,
-        currentUserRating.lastName,
-      ].filter(Boolean).join(' ') || fullName
-    : fullName;
+  const renderRating = () => {
+    const currentUserRating = ratingRows.find(
+      item => String(item.vkUserId) === String(userId)
+    );
 
-  return (
-    <section className="step-inner-page">
-      <span className="step-overline">
-        STEP CHALLENGE
-      </span>
+    const currentUserRatingName = currentUserRating
+      ? [
+          currentUserRating.firstName,
+          currentUserRating.lastName,
+        ].filter(Boolean).join(' ') || fullName
+      : fullName;
 
-      <h1>Рейтинг</h1>
+    return (
+      <section className="step-inner-page">
+        <span className="step-overline">
+          STEP CHALLENGE
+        </span>
 
-      <p className="step-page-description">
-        Здесь учитываются только результаты, одобренные модератором.
-      </p>
+        <h1>Рейтинг</h1>
 
-      {ratingLoading ? (
-        <div className="step-empty-card">
-          <p>Загружаем рейтинг...</p>
-        </div>
-      ) : (
-        <>
-          {/* ЛИЧНАЯ КАРТОЧКА РЕЙТИНГА */}
+        <p className="step-page-description">
+          Здесь учитываются только результаты, одобренные модератором.
+        </p>
 
-          <div
-            className="step-current-rating-card"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '13px',
-              margin: '18px 0 20px',
-              padding: '17px',
-              borderRadius: '18px',
-              border: '1px solid rgba(110, 160, 54, 0.22)',
-              background: 'linear-gradient(135deg, #f3f9e9 0%, #ffffff 100%)',
-              boxSizing: 'border-box',
-            }}
-          >
-            <span style={{
-              color: '#628b31',
-              fontSize: '10px',
-              fontWeight: 900,
-              letterSpacing: '1.2px',
-            }}>
-              ТВОЁ МЕСТО В РЕЙТИНГЕ
-            </span>
+        {ratingLoading ? (
+          <div className="step-empty-card">
+            <p>Загружаем рейтинг...</p>
+          </div>
+        ) : (
+          <>
+            {/* ЛИЧНАЯ КАРТОЧКА РЕЙТИНГА */}
 
-            {currentUserRating ? (
-              <div style={{
+            <div
+              className="step-current-rating-card"
+              style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                minWidth: 0,
+                flexDirection: 'column',
+                gap: '13px',
+                margin: '18px 0 20px',
+                padding: '17px',
+                borderRadius: '18px',
+                border: isDisqualified
+                  ? '1px solid rgba(190, 65, 55, 0.25)'
+                  : '1px solid rgba(110, 160, 54, 0.22)',
+                background: isDisqualified
+                  ? 'linear-gradient(135deg, #fff0ef 0%, #ffffff 100%)'
+                  : 'linear-gradient(135deg, #f3f9e9 0%, #ffffff 100%)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span style={{
+                color: isDisqualified ? '#b43b32' : '#628b31',
+                fontSize: '10px',
+                fontWeight: 900,
+                letterSpacing: '1.2px',
               }}>
-                {/* МЕСТО */}
+                ТВОЁ МЕСТО В РЕЙТИНГЕ
+              </span>
 
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  flex: '0 0 54px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '15px',
-                  background: '#dff0c7',
-                  color: '#416d1c',
-                  fontSize: '22px',
-                  fontWeight: 900,
-                }}>
-                  {currentUserRating.place}
-                </div>
-
-                {/* ИМЯ И ШАГИ */}
-
+              {isDisqualified ? (
                 <div style={{
                   display: 'flex',
-                  flex: 1,
                   flexDirection: 'column',
-                  gap: '5px',
-                  minWidth: 0,
+                  gap: '6px',
                 }}>
                   <strong style={{
-                    color: '#24351c',
+                    color: '#a8322b',
                     fontSize: '15px',
-                    lineHeight: 1.3,
-                    overflowWrap: 'anywhere',
                   }}>
-                    {currentUserRatingName}
+                    Ты исключён из рейтинга
                   </strong>
 
                   <span style={{
-                    color: '#60734f',
-                    fontSize: '13px',
-                    fontWeight: 700,
+                    color: '#8d514c',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
                   }}>
-                    {formatNumber(currentUserRating.steps)} шагов
+                    После дисквалификации участник не занимает место
+                    в итоговой таблице. История ранее отправленных
+                    результатов при этом сохраняется.
                   </span>
                 </div>
-              </div>
-            ) : (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '5px',
-              }}>
-                <strong style={{
-                  color: '#34472a',
-                  fontSize: '15px',
+              ) : currentUserRating ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  minWidth: 0,
                 }}>
-                  Пока нет места в рейтинге
-                </strong>
+                  {/* МЕСТО */}
 
-                <span style={{
-                  color: '#718066',
-                  fontSize: '12px',
-                  lineHeight: 1.5,
-                }}>
-                  Здесь появятся твои имя, количество подтверждённых шагов
-                  и место после одобрения первого результата.
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* ОБЩИЙ СПИСОК */}
-
-          {ratingRows.length === 0 ? (
-            <div className="step-empty-card">
-              <div className="step-empty-icon">🏆</div>
-
-              <h2>Пока нет рейтинга</h2>
-
-              <p>
-                Таблица лидеров появится после одобрения первых результатов.
-              </p>
-            </div>
-          ) : (
-            <div className="step-days-card">
-              {ratingRows.map(item => (
-                <div
-                  className="step-day"
-                  key={item.vkUserId}
-                >
-                  {/* НОМЕР МЕСТА */}
-
-                  <div className="step-day-number">
-                    {item.place}
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    flex: '0 0 54px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '15px',
+                    background: '#dff0c7',
+                    color: '#416d1c',
+                    fontSize: '22px',
+                    fontWeight: 900,
+                  }}>
+                    {currentUserRating.place}
                   </div>
 
-                  {/* ИМЯ И КОЛИЧЕСТВО ШАГОВ */}
+                  {/* ИМЯ И ШАГИ */}
 
-                  <div className="step-day-info">
-                    <strong>
-                      {[
-                        item.firstName,
-                        item.lastName,
-                      ].filter(Boolean).join(' ') || 'Участник'}
+                  <div style={{
+                    display: 'flex',
+                    flex: 1,
+                    flexDirection: 'column',
+                    gap: '5px',
+                    minWidth: 0,
+                  }}>
+                    <strong style={{
+                      color: '#24351c',
+                      fontSize: '15px',
+                      lineHeight: 1.3,
+                      overflowWrap: 'anywhere',
+                    }}>
+                      {currentUserRatingName}
                     </strong>
 
-                    <span>
-                      {formatNumber(item.steps)} шагов
+                    <span style={{
+                      color: '#60734f',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                    }}>
+                      {formatNumber(currentUserRating.steps)} шагов
                     </span>
                   </div>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '5px',
+                }}>
+                  <strong style={{
+                    color: '#34472a',
+                    fontSize: '15px',
+                  }}>
+                    Пока нет места в рейтинге
+                  </strong>
 
-                  {/* ГРУППА ИЗ БАЗЫ */}
-
-                  <span className="step-day-status">
-                    {item.group
-                      ? `${item.group} группа`
-                      : 'Группа не указана'}
+                  <span style={{
+                    color: '#718066',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
+                  }}>
+                    Здесь появятся твои имя, количество подтверждённых шагов
+                    и место после одобрения первого результата.
                   </span>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-};
+
+            {/* ОБЩИЙ СПИСОК */}
+
+            {ratingRows.length === 0 ? (
+              <div className="step-empty-card">
+                <div className="step-empty-icon">🏆</div>
+
+                <h2>
+                  {isDisqualified
+                    ? 'Ты не участвуешь в рейтинге'
+                    : 'Пока нет рейтинга'}
+                </h2>
+
+                <p>
+                  {isDisqualified
+                    ? 'Ранее отправленные результаты сохранены, но не учитываются в рейтинге.'
+                    : 'Таблица лидеров появится после одобрения первых результатов.'}
+                </p>
+              </div>
+            ) : (
+              <div className="step-days-card">
+                {ratingRows.map(item => (
+                  <div
+                    className="step-day"
+                    key={item.vkUserId}
+                  >
+                    {/* НОМЕР МЕСТА */}
+
+                    <div className="step-day-number">
+                      {item.place}
+                    </div>
+
+                    {/* ИМЯ И КОЛИЧЕСТВО ШАГОВ */}
+
+                    <div className="step-day-info">
+                      <strong>
+                        {[
+                          item.firstName,
+                          item.lastName,
+                        ].filter(Boolean).join(' ') || 'Участник'}
+                      </strong>
+
+                      <span>
+                        {formatNumber(item.steps)} шагов
+                      </span>
+                    </div>
+
+                    {/* ГРУППА ИЗ БАЗЫ */}
+
+                    <span className="step-day-status">
+                      {item.group
+                        ? `${item.group} группа`
+                        : 'Группа не указана'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    );
+  };
+
 
   /* =====================================
      ПРОФИЛЬ
-===================================== */
+  ===================================== */
 
   const renderProfile = () => (
     <section className="step-inner-page">
@@ -2702,12 +2918,54 @@ const renderRating = () => {
           <p>Группа {registeredParticipant?.group || registrationGroup}</p>
         )}
 
-        <span className="step-profile-status">
-          {isRegistered
-            ? 'Участник челленджа'
-            : 'Пока не зарегистрирован'}
+        <span
+          className="step-profile-status"
+          style={isDisqualified ? {
+            background: '#ffe7e5',
+            color: '#b43b32',
+          } : undefined}
+        >
+          {isDisqualified
+            ? 'Дисквалифицирован'
+            : isRegistered
+              ? 'Активный участник'
+              : 'Пока не зарегистрирован'}
         </span>
       </div>
+
+      {isDisqualified && (
+        <div
+          role="alert"
+          style={{
+            marginTop: '15px',
+            padding: '15px',
+            borderRadius: '15px',
+            border: '1px solid #f1c7c4',
+            background: '#fff0ef',
+            color: '#a8322b',
+            fontSize: '13px',
+            lineHeight: 1.55,
+          }}
+        >
+          <strong style={{
+            display: 'block',
+            marginBottom: '5px',
+          }}>
+            Участие в челлендже прекращено
+          </strong>
+
+          Ты дисквалифицирован и исключён из рейтинга.
+          Отправка новых результатов недоступна.
+
+          <span style={{
+            display: 'block',
+            marginTop: '7px',
+          }}>
+            Ранее отправленные заявки, одобренные результаты
+            и история участия сохранены.
+          </span>
+        </div>
+      )}
 
       <div className="step-profile-info">
         <div>
@@ -2723,7 +2981,11 @@ const renderRating = () => {
         <div>
           <span>Статус участия</span>
           <strong>
-            {isRegistered ? 'Участвует' : 'Не участвует'}
+            {isDisqualified
+              ? 'Дисквалифицирован'
+              : isRegistered
+                ? 'Активен'
+                : 'Не участвует'}
           </strong>
         </div>
       </div>
@@ -2774,9 +3036,10 @@ const renderRating = () => {
     </section>
   );
 
+
   /* =====================================
      ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
-===================================== */
+  ===================================== */
 
   if (profileLoading || !registrationChecked) {
     return (
@@ -2868,9 +3131,10 @@ const renderRating = () => {
     );
   }
 
+
   /* =====================================
      ОСНОВНОЙ ИНТЕРФЕЙС
-===================================== */
+  ===================================== */
 
   return (
     <Panel
@@ -2893,6 +3157,7 @@ const renderRating = () => {
                 objectFit: 'contain',
               }}
             />
+
             <div className="step-brand-name">
               <strong>10 000</strong>
               <span>шагов</span>
@@ -2967,6 +3232,7 @@ const renderRating = () => {
     </Panel>
   );
 };
+
 
 Home.propTypes = {
   id: PropTypes.string.isRequired,
