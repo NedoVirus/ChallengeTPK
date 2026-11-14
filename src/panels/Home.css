@@ -1042,3 +1042,52 @@
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
+
+/* =====================================
+   СТАТУСЫ ДНЕЙ ЧЕЛЛЕНДЖА
+===================================== */
+
+.step-day-status {
+  flex-shrink: 0;
+  max-width: 112px;
+  text-align: center;
+  border-radius: 20px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+  transition: background 0.2s, color 0.2s;
+}
+
+/* Не отправлено — серый */
+.step-day-status.status-empty {
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+}
+
+/* Загрузка — серый, чуть приглушённый */
+.step-day-status.status-loading {
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* На проверке — жёлтый */
+.step-day-status.status-pending {
+  background: #fff3d7;
+  color: #946300;
+}
+
+/* Одобрено — зелёный */
+.step-day-status.status-approved {
+  background: #e2f5e7;
+  color: #247a43;
+}
+
+/* Отклонено — красный */
+.step-day-status.status-rejected {
+  background: #ffe7e5;
+  color: #b43b32;
+}

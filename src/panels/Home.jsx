@@ -921,6 +921,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       <section className="step-section">
         {(() => {
           const DAILY_GOAL = 10000;
+          const TOTAL_GOAL = DAILY_GOAL * CHALLENGE_DAYS.length; // 50 000
 
           const dayEntries = CHALLENGE_DAYS.map(day => ({
             day,
@@ -937,6 +938,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             entry => entry.submission.status === 'Отклонено'
           );
 
+          // Сумма всех одобренных шагов за 5 дней
+          const approvedSteps = approved.reduce(
+            (sum, entry) => sum + (Number(entry.submission.steps) || 0),
+            0
+          );
+
+          // Лучший день (для подписи слева внизу)
           const bestApproved = approved.reduce(
             (best, entry) =>
               !best || Number(entry.submission.steps) > Number(best.submission.steps)
@@ -945,20 +953,23 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             null
           );
 
-          const approvedSteps = bestApproved
+          const bestApprovedSteps = bestApproved
             ? Number(bestApproved.submission.steps) || 0
             : 0;
 
           const progressPercent = Math.min(
             100,
-            Math.round((approvedSteps / DAILY_GOAL) * 100)
+            Math.round((approvedSteps / TOTAL_GOAL) * 100)
           );
+
+          const approvedDaysCount = approved.length;
+          const totalDays = CHALLENGE_DAYS.length;
 
           let statusText = 'Ожидает результатов';
           let statusBg = 'var(--vkui--color_background_secondary, #f0f1f3)';
           let statusColor = 'var(--vkui--color_text_secondary, #737a85)';
 
-          if (approvedSteps >= DAILY_GOAL) {
+          if (approvedSteps >= TOTAL_GOAL) {
             statusText = 'Цель достигнута';
             statusBg = '#e2f5e7';
             statusColor = '#247a43';
@@ -980,21 +991,21 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           const hasAnyPending = pending.length > 0;
 
           const bottomLeft = hasAnyApproved
-            ? 'Лучший результат'
+            ? `Лучший день: ${formatNumber(bestApprovedSteps)} / ${formatNumber(DAILY_GOAL)}`
             : hasAnyPending
               ? 'Проверяется модератором'
               : 'Данные ещё не загружены';
 
           const bottomRight = hasAnyApproved
-            ? `${formatNumber(approvedSteps)} / ${formatNumber(DAILY_GOAL)}`
-            : `— / ${formatNumber(DAILY_GOAL)}`;
+            ? `${formatNumber(approvedSteps)} / ${formatNumber(TOTAL_GOAL)}`
+            : `— / ${formatNumber(TOTAL_GOAL)}`;
 
-          const noteText = approvedSteps >= DAILY_GOAL
-            ? 'Цель выполнена. Отличная работа!'
+          const noteText = approvedSteps >= TOTAL_GOAL
+            ? 'Цель челленджа выполнена. Отличная работа!'
             : hasAnyPending
-              ? 'Результат на проверке у модератора.'
+              ? 'Часть результатов ещё на проверке у модератора.'
               : hasAnyApproved
-                ? 'Продолжай в том же духе — до цели осталось немного.'
+                ? `Одобрено дней: ${approvedDaysCount} из ${totalDays}. Продолжай в том же духе.`
                 : 'Результаты появятся здесь после проверки модератором.';
 
           return (
@@ -1004,7 +1015,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                   <span className="step-overline">ТВОЯ АКТИВНОСТЬ</span>
                   <h2>Твоя цель</h2>
                 </div>
-                <span className="step-section-caption">Каждый день</span>
+                <span className="step-section-caption">
+                  10 000 в день
+                </span>
               </div>
 
               <div className="step-goal-card">
@@ -1019,7 +1032,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 </div>
 
                 <div className="step-goal-number">
-                  {formatNumber(DAILY_GOAL)}
+                  {formatNumber(TOTAL_GOAL)}
                   <span>шагов</span>
                 </div>
 
@@ -1079,27 +1092,55 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         <div className="step-days-card">
           {CHALLENGE_DAYS.map(day => {
             const submission = homeSubmissions[day.value];
+
+            const rawStatus = homeSubmissionsLoading
+              ? 'loading'
+              : submission?.status || 'empty';
+
+            let statusClass = 'status-empty';
+            let statusLabel = 'Не отправлено';
+
+            if (rawStatus === 'loading') {
+              statusClass = 'status-loading';
+              statusLabel = 'Загрузка...';
+            } else if (rawStatus === 'Одобрено') {
+              statusClass = 'status-approved';
+              statusLabel = 'Одобрено';
+            } else if (rawStatus === 'Отклонено') {
+              statusClass = 'status-rejected';
+              statusLabel = 'Отклонено';
+            } else if (rawStatus === 'На проверке') {
+              statusClass = 'status-pending';
+              statusLabel = 'На проверке';
+            }
+
             return (
               <div className="step-day" key={day.value}>
                 <div className="step-day-number">
                   {String(day.number).padStart(2, '0')}
                 </div>
+
                 <div className="step-day-info">
                   <strong>{day.label}</strong>
                   <span>Цель — 10 000 шагов</span>
+
                   {submission?.status === 'Отклонено' && submission.comment && (
-                    <span style={{
-                      display: 'block', marginTop: '5px',
-                      color: '#c34b43', fontSize: '11px', lineHeight: 1.4,
-                    }}>
+                    <span
+                      style={{
+                        display: 'block',
+                        marginTop: '5px',
+                        color: '#c34b43',
+                        fontSize: '11px',
+                        lineHeight: 1.4,
+                      }}
+                    >
                       Причина: {submission.comment}
                     </span>
                   )}
                 </div>
-                <span className="step-day-status">
-                  {homeSubmissionsLoading
-                    ? 'Загрузка...'
-                    : submission?.status || 'Не отправлено'}
+
+                <span className={`step-day-status ${statusClass}`}>
+                  {statusLabel}
                 </span>
               </div>
             );
