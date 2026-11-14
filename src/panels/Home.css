@@ -108,7 +108,7 @@
   overflow: hidden;
   border-radius: 25px;
   padding: 30px;
-  min-height: 390px;
+  min-height: 300px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -770,7 +770,7 @@
   }
 
   .step-hero {
-    min-height: 390px;
+    min-height: 300px;
     padding: 23px 19px;
     border-radius: 21px;
   }
@@ -847,4 +847,74 @@
   .step-hero-stat span {
     font-size: 8px;
   }
+}
+
+/* =====================================
+   ЛОГОТИП 10 000 ШАГОВ
+===================================== */
+
+.step-brand-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.step-brand-name strong {
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+}
+
+.step-brand-name span {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: none;
+  opacity: 0.65;
+}
+
+/* =====================================
+   НИЖНЯЯ НАВИГАЦИЯ
+===================================== */
+
+.step-page {
+  padding-bottom: calc(105px + env(safe-area-inset-bottom));
+}
+
+.step-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  z-index: 100;
+
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+
+  margin: 0;
+  padding: 10px 13px calc(10px + env(safe-area-inset-bottom));
+
+  border: none;
+  border-top: 1px solid var(
+    --vkui--color_separator_primary,
+    rgba(0, 0, 0, 0.07)
+  );
+
+  border-radius: 19px 19px 0 0;
+
+  background: var(--vkui--color_background_content, #fff);
+
+  box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.07);
+}
+
+.step-bottom-nav button {
+  min-width: 0;
 }
