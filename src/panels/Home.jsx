@@ -223,7 +223,12 @@ function formatNumber(value) {
    ОСНОВНОЙ КОМПОНЕНТ
 ===================================== */
 
+
+const sanitizeRussianName = value => {
+  return value.replace(/[^А-Яа-яЁё -]/g, '');
+};
 export const Home = ({ id, fetchedUser, launchParams }) => {
+  const registrationCardRef = useRef(null);
   const [activeTab, setActiveTab] = useState('home');
 
   // Загрузка профиля VK.
@@ -431,6 +436,24 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     setRegistrationFirstName(current => current || first_name || '');
     setRegistrationLastName(current => current || last_name || '');
   }, [first_name, last_name]);
+
+
+  /* =====================================
+     АВТОПРОКРУТКА К ФОРМЕ РЕГИСТРАЦИИ
+  ===================================== */
+
+  useEffect(() => {
+    if (!registrationFormOpen || isRegistered) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      registrationCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  }, [registrationFormOpen, isRegistered]);
 
 
   /* =====================================
@@ -1363,6 +1386,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
           {registrationFormOpen && !isRegistered && (
             <div
+              ref={registrationCardRef}
               className="step-registration-card"
               style={{
                 width: '100%',
@@ -1457,7 +1481,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 lineHeight: 1.45,
                 color: '#71808b',
               }}>
-                Имя и фамилия подставлены из профиля VK — проверь, если что-то не совпадает с твоими настоящими данными, то участие невозможно и не получится узнать победителя.
+                Имя и фамилия подставлены из профиля VK — проверь, если что-то не совпадает с твоими настоящими данными, то участие невозможно и не получится узнать победителя. Имя и фамилия указываются исключительно на русском языке (кириллицей). Номер группы вводится только цифрами.
               </p>
 
               <form onSubmit={handleRegister}>
@@ -1475,7 +1499,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                     autoComplete="given-name"
                     value={registrationFirstName}
                     onChange={event =>
-                      setRegistrationFirstName(event.target.value)
+                      setRegistrationFirstName(
+                        sanitizeRussianName(event.target.value)
+                      )
                     }
                     placeholder="Введите имя"
                     maxLength={40}
@@ -1513,7 +1539,9 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                     autoComplete="family-name"
                     value={registrationLastName}
                     onChange={event =>
-                      setRegistrationLastName(event.target.value)
+                      setRegistrationLastName(
+                        sanitizeRussianName(event.target.value)
+                      )
                     }
                     placeholder="Введите фамилию"
                     maxLength={40}
@@ -1556,7 +1584,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                         event.target.value.replace(/\D/g, '').slice(0, 6)
                       )
                     }
-                    placeholder="Например, 21"
+                    placeholder="Например, 29"
                     maxLength={6}
                     required
                     disabled={registrationBusy}
@@ -3249,3 +3277,32 @@ Home.propTypes = {
 
   launchParams: PropTypes.object,
 };
+
+
+/* =====================================
+   ДОПОЛНИТЕЛЬНЫЕ СТИЛИ
+   (автоскролл к форме регистрации)
+===================================== */
+
+const registrationScrollStyles = `
+html {
+  scroll-behavior: smooth;
+}
+
+.step-registration-card {
+  scroll-margin-top: 30px;
+  scroll-margin-bottom: 110px;
+}
+`;
+
+if (
+  typeof document !== 'undefined' &&
+  !document.getElementById('step-registration-scroll-styles')
+) {
+  const styleElement = document.createElement('style');
+
+  styleElement.id = 'step-registration-scroll-styles';
+  styleElement.textContent = registrationScrollStyles;
+
+  document.head.appendChild(styleElement);
+}

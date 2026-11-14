@@ -108,7 +108,7 @@
   overflow: hidden;
   border-radius: 25px;
   padding: 30px;
-  min-height: 300px;
+  min-height: 280px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -799,7 +799,7 @@
   }
 
   .step-hero {
-    min-height: 300px;
+    min-height: 280px;
     padding: 23px 19px;
     border-radius: 21px;
   }
@@ -946,4 +946,13 @@
 
 .step-bottom-nav button {
   min-width: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.step-registration-card {
+  scroll-margin-top: 30px;
+  scroll-margin-bottom: 110px;
 }
