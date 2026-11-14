@@ -10,6 +10,7 @@ import {
   getModerationQueue,
   getModerationImage,
   moderateSubmission,
+  getChallengeStatus,
 } from '../utils/api';
 import './Home.css';
 
@@ -35,6 +36,7 @@ const ERROR_MESSAGES = {
   invalid_vk_user_id: 'Не удалось определить пользователя VK.',
   invalid_vk_signature: 'VK не подтвердил подлинность запуска. Перезапусти приложение.',
   unknown_action: 'Неизвестная операция сервера.',
+  challenge_inactive: 'Челлендж сейчас неактивен. Активностей нет.',
   participant_not_registered: 'Сначала необходимо зарегистрироваться в челлендже.',
   participant_disqualified: 'Ты дисквалифицирован. Отправка новых результатов недоступна.',
   invalid_challenge_date: 'Выбрана дата вне периода челленджа.',
@@ -55,15 +57,6 @@ const ERROR_MESSAGES = {
 /* =====================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 ===================================== */
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Не удалось прочитать файл скриншота.'));
-    reader.readAsDataURL(file);
-  });
-}
 
 function convertImageToJpegDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -133,6 +126,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   // Загрузка профиля VK.
   const [profileLoading, setProfileLoading] = useState(true);
+
+  // Статус челленджа (F2 в листе «Челленджи»).
+  const [challengeActive, setChallengeActive] = useState(null);
+  const [challengeStatusLoading, setChallengeStatusLoading] = useState(true);
+  const [challengeStatusError, setChallengeStatusError] = useState('');
 
   // Регистрация.
   const [participantsCount, setParticipantsCount] = useState(null);
@@ -219,6 +217,27 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const isDisqualified = isRegistered && participantStatus === 'disqualified';
 
   /* =====================================
+     СТАТУС ЧЕЛЛЕНДЖА (F2 в «Челленджи»)
+  ===================================== */
+  useEffect(() => {
+    let active = true;
+
+    setChallengeStatusLoading(true);
+
+    getChallengeStatus()
+      .then(status => {
+        if (!active) return;
+        setChallengeActive(Boolean(status.active));
+        setChallengeStatusError(status.error || '');
+      })
+      .finally(() => {
+        if (active) setChallengeStatusLoading(false);
+      });
+
+    return () => { active = false; };
+  }, []);
+
+  /* =====================================
      ЗАГРУЗКА ПРОФИЛЯ VK
   ===================================== */
   useEffect(() => {
@@ -244,6 +263,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
      ЗАГРУЗКА КОЛИЧЕСТВА УЧАСТНИКОВ
   ===================================== */
   useEffect(() => {
+    if (challengeActive === false) return;
     let active = true;
     getGasJsonp('stats')
       .then(data => {
@@ -253,7 +273,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       })
       .catch(error => console.warn('Ошибка загрузки статистики:', error));
     return () => { active = false; };
-  }, []);
+  }, [challengeActive]);
 
   /* =====================================
      ПРЕДЗАПОЛНЕНИЕ ФОРМЫ ДАННЫМИ VK
@@ -284,6 +304,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ===================================== */
   useEffect(() => {
     let active = true;
+
+    if (challengeActive === false) {
+      setRegistrationChecked(true);
+      return () => { active = false; };
+    }
 
     if (!userId || !hasSignedLaunchParams) {
       setRegistrationChecked(true);
@@ -325,7 +350,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       });
 
     return () => { active = false; };
-  }, [userId, hasSignedLaunchParams, first_name, last_name]);
+  }, [userId, hasSignedLaunchParams, first_name, last_name, challengeActive]);
 
   /* =====================================
      ОБНОВЛЕНИЕ СТАТУСА УЧАСТНИКА
@@ -338,7 +363,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       !hasSignedLaunchParams ||
       !userId ||
       activeTab === 'home' ||
-      activeTab === 'moderation'
+      activeTab === 'moderation' ||
+      challengeActive === false
     ) {
       return () => { active = false; };
     }
@@ -352,7 +378,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       .catch(error => console.warn('Не удалось обновить статус участника:', error));
 
     return () => { active = false; };
-  }, [activeTab, registrationChecked, hasSignedLaunchParams, userId]);
+  }, [activeTab, registrationChecked, hasSignedLaunchParams, userId, challengeActive]);
 
   /* =====================================
      СТАТУС РЕЗУЛЬТАТА
@@ -360,7 +386,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   useEffect(() => {
     let active = true;
 
-    if (activeTab !== 'submit' || !hasSignedLaunchParams || !isRegistered) {
+    if (
+      activeTab !== 'submit' ||
+      !hasSignedLaunchParams ||
+      !isRegistered ||
+      challengeActive === false
+    ) {
       return () => { active = false; };
     }
 
@@ -378,7 +409,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     return () => { active = false; };
   }, [
     activeTab, resultDate, hasSignedLaunchParams, isRegistered,
-    userId, launchParams, moderationReloadKey,
+    userId, launchParams, moderationReloadKey, challengeActive,
   ]);
 
   /* =====================================
@@ -387,7 +418,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   useEffect(() => {
     let active = true;
 
-    if (activeTab !== 'home' || !hasSignedLaunchParams || !isRegistered) {
+    if (
+      activeTab !== 'home' ||
+      !hasSignedLaunchParams ||
+      !isRegistered ||
+      challengeActive === false
+    ) {
       setHomeSubmissions({});
       setHomeSubmissionsLoading(false);
       return () => { active = false; };
@@ -421,7 +457,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     return () => { active = false; };
   }, [
     activeTab, hasSignedLaunchParams, isRegistered,
-    userId, launchParams, moderationReloadKey,
+    userId, launchParams, moderationReloadKey, challengeActive,
   ]);
 
   /* =====================================
@@ -429,21 +465,28 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ===================================== */
   useEffect(() => {
     let active = true;
-    if (activeTab !== 'rating') return () => { active = false; };
+    if (activeTab !== 'rating' || challengeActive === false) {
+      return () => { active = false; };
+    }
     setRatingLoading(true);
     getGasJsonp('rating')
       .then(data => { if (active && data?.ok) setRatingRows(data.rating || []); })
       .catch(error => console.warn('Ошибка загрузки рейтинга:', error))
       .finally(() => { if (active) setRatingLoading(false); });
     return () => { active = false; };
-  }, [activeTab]);
+  }, [activeTab, challengeActive]);
 
   /* =====================================
      ЗАГРУЗКА ОЧЕРЕДИ МОДЕРАЦИИ
   ===================================== */
   useEffect(() => {
     let active = true;
-    if (activeTab !== 'moderation' || !isModerator || !hasSignedLaunchParams) {
+    if (
+      activeTab !== 'moderation' ||
+      !isModerator ||
+      !hasSignedLaunchParams ||
+      challengeActive === false
+    ) {
       return () => { active = false; };
     }
     setModerationLoading(true);
@@ -462,17 +505,24 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       })
       .finally(() => { if (active) setModerationLoading(false); });
     return () => { active = false; };
-  }, [activeTab, isModerator, hasSignedLaunchParams, userId, launchParams]);
+  }, [activeTab, isModerator, hasSignedLaunchParams, userId, launchParams, challengeActive]);
 
   /* =====================================
      РЕГИСТРАЦИЯ
   ===================================== */
   const openRegistrationForm = () => {
+    if (challengeActive === false) {
+      setRegistrationMessage('Челлендж сейчас неактивен. Активностей нет.');
+      setRegistrationMessageType('error');
+      return;
+    }
+
     if (!hasSignedLaunchParams) {
       setRegistrationMessage('Для регистрации открой STEP CHALLENGE непосредственно через VK.');
       setRegistrationMessageType('error');
       return;
     }
+
     if (isRegistered || registrationBusy || !registrationChecked) return;
 
     setRegistrationFirstName(
@@ -496,11 +546,18 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const handleRegister = async event => {
     event?.preventDefault();
 
+    if (challengeActive === false) {
+      setRegistrationMessage('Челлендж сейчас неактивен. Активностей нет.');
+      setRegistrationMessageType('error');
+      return;
+    }
+
     if (!hasSignedLaunchParams) {
       setRegistrationMessage('Для регистрации открой STEP CHALLENGE непосредственно через VK.');
       setRegistrationMessageType('error');
       return;
     }
+
     if (isRegistered || registrationBusy) return;
 
     const cleanFirstName = registrationFirstName.trim().replace(/\s+/g, ' ');
@@ -614,6 +671,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
      ОТПРАВКА РЕЗУЛЬТАТА
   ===================================== */
   const handleSubmitResult = async () => {
+    if (challengeActive === false) {
+      setSubmissionMessage('Челлендж сейчас неактивен. Отправка невозможна.');
+      setSubmissionMessageType('error');
+      return;
+    }
+
     if (!hasSignedLaunchParams) {
       setSubmissionMessage('Открой STEP CHALLENGE непосредственно через VK.');
       setSubmissionMessageType('error');
@@ -735,6 +798,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   const handleModerationDecision = async (submission, decision) => {
     if (!isModerator) return;
+
+    if (challengeActive === false) {
+      setModerationError('Челлендж сейчас неактивен. Модерация недоступна.');
+      return;
+    }
 
     const comment = String(moderationComments[submission.id] || '').trim();
 
@@ -921,7 +989,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       <section className="step-section">
         {(() => {
           const DAILY_GOAL = 10000;
-          const TOTAL_GOAL = DAILY_GOAL * CHALLENGE_DAYS.length; // 50 000
+          const TOTAL_GOAL = DAILY_GOAL * CHALLENGE_DAYS.length;
 
           const dayEntries = CHALLENGE_DAYS.map(day => ({
             day,
@@ -938,13 +1006,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             entry => entry.submission.status === 'Отклонено'
           );
 
-          // Сумма всех одобренных шагов за 5 дней
           const approvedSteps = approved.reduce(
             (sum, entry) => sum + (Number(entry.submission.steps) || 0),
             0
           );
 
-          // Лучший день (для подписи слева внизу)
           const bestApproved = approved.reduce(
             (best, entry) =>
               !best || Number(entry.submission.steps) > Number(best.submission.steps)
@@ -1921,7 +1987,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   );
 
   /* =====================================
-    МОДАЛКА РЕГИСТРАЦИИ
+     МОДАЛКА РЕГИСТРАЦИИ
   ===================================== */
   const renderRegistrationModal = () => {
     if (!registrationFormOpen || isRegistered) return null;
@@ -1957,7 +2023,6 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             marginBottom: '14px',
             borderBottom: '1px solid #e8edf0',
           }}>
-            {/* АВАТАР + ГАЛОЧКА ПОДТВЕРЖДЕНИЯ */}
             <div style={{
               position: 'relative',
               width: '46px',
@@ -2174,12 +2239,120 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   };
 
   /* =====================================
+     ЗАГРУЗКА СТАТУСА ЧЕЛЛЕНДЖА
+  ===================================== */
+  if (challengeStatusLoading) {
+    return (
+      <Panel id={id} className="step-panel">
+        <PanelHeader>Челлендж | ТПК</PanelHeader>
+
+        <style>
+          {`
+            @keyframes stepLoaderSpin { to { transform: rotate(360deg); } }
+          `}
+        </style>
+
+        <div style={{
+          minHeight: '70vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: '30px',
+            height: '30px',
+            border: '3px solid rgba(120, 140, 100, 0.18)',
+            borderTopColor: '#8bbd3c',
+            borderRadius: '50%',
+            animation: 'stepLoaderSpin 0.8s linear infinite',
+          }} />
+          <p style={{ marginTop: '18px', fontSize: '13px', opacity: 0.65 }}>
+            Проверяем статус челленджа...
+          </p>
+        </div>
+      </Panel>
+    );
+  }
+
+  /* =====================================
+     ЧЕЛЛЕНДЖ НЕАКТИВЕН — ЗАГЛУШКА (для всех)
+  ===================================== */
+  if (challengeActive === false) {
+    return (
+      <Panel id={id} className="step-panel">
+        <PanelHeader>Челлендж | ТПК</PanelHeader>
+
+        <div style={{
+          minHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}>
+          <div style={{
+            width: '88px',
+            height: '88px',
+            borderRadius: '24px',
+            background: '#eff8df',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '44px',
+          }}>
+            🚧
+          </div>
+
+          <h1 style={{
+            margin: '22px 0 10px',
+            fontSize: '22px',
+            fontWeight: 850,
+            color: 'var(--vkui--color_text_primary, #181b22)',
+            letterSpacing: '-0.5px',
+          }}>
+            Активностей пока нет
+          </h1>
+
+          <p style={{
+            margin: 0,
+            maxWidth: '340px',
+            fontSize: '13px',
+            lineHeight: 1.6,
+            color: 'var(--vkui--color_text_secondary, #818794)',
+          }}>
+            Челлендж сейчас не проводится. Как только он запустится
+            — главная страница и регистрация станут доступны.
+            Заходи позже.
+          </p>
+
+          {challengeStatusError && (
+            <p style={{
+              marginTop: '14px',
+              fontSize: '11px',
+              opacity: 0.5,
+              color: 'var(--vkui--color_text_secondary, #818794)',
+            }}>
+              ({challengeStatusError})
+            </p>
+          )}
+        </div>
+      </Panel>
+    );
+  }
+
+  /* =====================================
      ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
   ===================================== */
   if (profileLoading || !registrationChecked) {
     return (
       <Panel id={id} className="step-panel">
-        <PanelHeader>STEP CHALLENGE</PanelHeader>
+        <PanelHeader>Челлендж | ТПК</PanelHeader>
 
         <style>
           {`

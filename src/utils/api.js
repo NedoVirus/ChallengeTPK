@@ -315,6 +315,9 @@ export async function submitStepsResult(payload) {
 
   if (!result?.ok) {
     const messages = {
+      challenge_inactive:
+        'Челлендж сейчас неактивен. Активностей нет.',
+
       image_base64_decode_failed:
         'Ошибка декодирования изображения. Попробуй сохранить скриншот заново.',
 
@@ -323,7 +326,7 @@ export async function submitStepsResult(payload) {
 
       invalid_image_data:
         'Не удалось прочитать изображение.',
-        
+
       server_not_configured:
         'Не настроены параметры VK в Apps Script.',
 
@@ -353,9 +356,6 @@ export async function submitStepsResult(payload) {
 
       invalid_image_size:
         'Размер изображения превышает допустимый.',
-
-      invalid_image_data:
-        'Не удалось прочитать изображение.',
 
       database_not_configured:
         'Не настроена Google Таблица.',
@@ -408,6 +408,9 @@ export async function getModerationQueue(
 
   if (!result?.ok) {
     const messages = {
+      challenge_inactive:
+        'Челлендж сейчас неактивен. Модерация недоступна.',
+
       moderator_access_denied:
         'У этого аккаунта нет доступа к модерации.',
 
@@ -489,6 +492,9 @@ export async function moderateSubmission(payload) {
 
   if (!result?.ok) {
     const messages = {
+      challenge_inactive:
+        'Челлендж сейчас неактивен. Модерация недоступна.',
+
       moderator_access_denied:
         'У этого аккаунта нет доступа к модерации.',
 
@@ -513,4 +519,29 @@ export async function moderateSubmission(payload) {
   }
 
   return result;
+}
+
+
+/* =====================================
+   СТАТУС ЧЕЛЛЕНДЖА
+===================================== */
+
+export async function getChallengeStatus(timeoutMs = 15000) {
+  try {
+    const result = await getGasJsonp(
+      'challenge_status',
+      {},
+      timeoutMs
+    );
+
+    if (!result?.ok) {
+      // Безопасный фолбэк: если сервер не ответил — считаем неактивным.
+      return { active: false, error: result?.error };
+    }
+
+    return { active: Boolean(result.active) };
+  } catch (error) {
+    console.warn('Не удалось получить статус челленджа:', error);
+    return { active: false, error: error.message };
+  }
 }

@@ -491,10 +491,23 @@
   text-align: center;
   border-radius: 20px;
   padding: 6px 10px;
-  background: var(--vkui--color_background_secondary, #f0f1f3);
-  color: var(--vkui--color_text_secondary, #818794);
   font-size: 10px;
   font-weight: 700;
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+  transition: background 0.2s, color 0.2s;
+}
+
+.step-day-status.status-empty {
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+}
+
+.step-day-status.status-loading {
+  background: var(--vkui--color_background_secondary, #f0f1f3);
+  color: var(--vkui--color_text_secondary, #818794);
+  opacity: 0.7;
+  font-style: italic;
 }
 
 .step-day-status.status-pending {
@@ -697,37 +710,32 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  bottom: 0;
 
-  z-index: 1000;
+  z-index: 100;
+
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
 
-  width: calc(100% - 26px);
-  max-width: 810px;
-  margin: 0 auto;
+  margin: 0;
+  padding: 10px 13px calc(10px + env(safe-area-inset-bottom));
 
-  box-sizing: border-box;
-  padding: 10px;
-
-  border: 1px solid var(
+  border: none;
+  border-top: 1px solid var(
     --vkui--color_separator_primary,
     rgba(0, 0, 0, 0.07)
   );
 
-  border-radius: 18px;
+  border-radius: 19px 19px 0 0;
 
-  background: var(
-    --vkui--color_background_content,
-    #fff
-  );
+  background: var(--vkui--color_background_content, #fff);
 
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.07);
 }
 
 .step-bottom-nav button {
@@ -768,24 +776,6 @@
   font-size: 22px;
   line-height: 1;
 }
-
-/* .step-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  margin-top: 23px;
-  color: var(--vkui--color_text_secondary, #818794);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 2px;
-}
-
-.step-footer span {
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0;
-} */
 
 /* MOBILE */
 
@@ -912,38 +902,6 @@
   padding-bottom: calc(105px + env(safe-area-inset-bottom));
 }
 
-.step-bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-
-  z-index: 100;
-
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-
-  margin: 0;
-  padding: 10px 13px calc(10px + env(safe-area-inset-bottom));
-
-  border: none;
-  border-top: 1px solid var(
-    --vkui--color_separator_primary,
-    rgba(0, 0, 0, 0.07)
-  );
-
-  border-radius: 19px 19px 0 0;
-
-  background: var(--vkui--color_background_content, #fff);
-
-  box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.07);
-}
-
 .step-bottom-nav button {
   min-width: 0;
 }
@@ -1041,53 +999,4 @@
 @keyframes stepModalSlide {
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
-}
-
-/* =====================================
-   СТАТУСЫ ДНЕЙ ЧЕЛЛЕНДЖА
-===================================== */
-
-.step-day-status {
-  flex-shrink: 0;
-  max-width: 112px;
-  text-align: center;
-  border-radius: 20px;
-  padding: 6px 10px;
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--vkui--color_background_secondary, #f0f1f3);
-  color: var(--vkui--color_text_secondary, #818794);
-  transition: background 0.2s, color 0.2s;
-}
-
-/* Не отправлено — серый */
-.step-day-status.status-empty {
-  background: var(--vkui--color_background_secondary, #f0f1f3);
-  color: var(--vkui--color_text_secondary, #818794);
-}
-
-/* Загрузка — серый, чуть приглушённый */
-.step-day-status.status-loading {
-  background: var(--vkui--color_background_secondary, #f0f1f3);
-  color: var(--vkui--color_text_secondary, #818794);
-  opacity: 0.7;
-  font-style: italic;
-}
-
-/* На проверке — жёлтый */
-.step-day-status.status-pending {
-  background: #fff3d7;
-  color: #946300;
-}
-
-/* Одобрено — зелёный */
-.step-day-status.status-approved {
-  background: #e2f5e7;
-  color: #247a43;
-}
-
-/* Отклонено — красный */
-.step-day-status.status-rejected {
-  background: #ffe7e5;
-  color: #b43b32;
 }
