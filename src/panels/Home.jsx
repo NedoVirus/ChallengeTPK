@@ -1573,7 +1573,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           disabled={!isRegistered || !hasSignedLaunchParams}
         >
           {isRegistered
-            ? 'Загрузить скриншот Google Fit'
+            ? 'Загрузить результат'
             : 'Сначала зарегистрируйся'}
 
           <span>↗</span>
@@ -2475,11 +2475,23 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </section>
   );
 
-  /* =====================================
-     РЕЙТИНГ
+/* =====================================
+   РЕЙТИНГ
 ===================================== */
 
-  const renderRating = () => (
+const renderRating = () => {
+  const currentUserRating = ratingRows.find(
+    item => String(item.vkUserId) === String(userId)
+  );
+
+  const currentUserRatingName = currentUserRating
+    ? [
+        currentUserRating.firstName,
+        currentUserRating.lastName,
+      ].filter(Boolean).join(' ') || fullName
+    : fullName;
+
+  return (
     <section className="step-inner-page">
       <span className="step-overline">
         STEP CHALLENGE
@@ -2495,48 +2507,166 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         <div className="step-empty-card">
           <p>Загружаем рейтинг...</p>
         </div>
-      ) : ratingRows.length === 0 ? (
-        <div className="step-empty-card">
-          <div className="step-empty-icon">🏆</div>
-
-          <h2>Пока нет рейтинга</h2>
-
-          <p>
-            Таблица лидеров появится после одобрения первых результатов.
-          </p>
-        </div>
       ) : (
-        <div className="step-days-card">
-          {ratingRows.map(item => (
-            <div className="step-day" key={item.vkUserId}>
-              <div className="step-day-number">
-                {item.place <= 3
-                  ? ['🥇', '🥈', '🥉'][item.place - 1]
-                  : item.place}
-              </div>
+        <>
+          {/* ЛИЧНАЯ КАРТОЧКА РЕЙТИНГА */}
 
-              <div className="step-day-info">
-                <strong>
-                  {[
-                    item.firstName,
-                    item.lastName,
-                  ].filter(Boolean).join(' ') || 'Участник'}
+          <div
+            className="step-current-rating-card"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '13px',
+              margin: '18px 0 20px',
+              padding: '17px',
+              borderRadius: '18px',
+              border: '1px solid rgba(110, 160, 54, 0.22)',
+              background: 'linear-gradient(135deg, #f3f9e9 0%, #ffffff 100%)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <span style={{
+              color: '#628b31',
+              fontSize: '10px',
+              fontWeight: 900,
+              letterSpacing: '1.2px',
+            }}>
+              ТВОЁ МЕСТО В РЕЙТИНГЕ
+            </span>
+
+            {currentUserRating ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                minWidth: 0,
+              }}>
+                {/* МЕСТО */}
+
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  flex: '0 0 54px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '15px',
+                  background: '#dff0c7',
+                  color: '#416d1c',
+                  fontSize: '22px',
+                  fontWeight: 900,
+                }}>
+                  {currentUserRating.place}
+                </div>
+
+                {/* ИМЯ И ШАГИ */}
+
+                <div style={{
+                  display: 'flex',
+                  flex: 1,
+                  flexDirection: 'column',
+                  gap: '5px',
+                  minWidth: 0,
+                }}>
+                  <strong style={{
+                    color: '#24351c',
+                    fontSize: '15px',
+                    lineHeight: 1.3,
+                    overflowWrap: 'anywhere',
+                  }}>
+                    {currentUserRatingName}
+                  </strong>
+
+                  <span style={{
+                    color: '#60734f',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                  }}>
+                    {formatNumber(currentUserRating.steps)} шагов
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+              }}>
+                <strong style={{
+                  color: '#34472a',
+                  fontSize: '15px',
+                }}>
+                  Пока нет места в рейтинге
                 </strong>
 
-                <span>
-                  {formatNumber(item.steps)} шагов
+                <span style={{
+                  color: '#718066',
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                }}>
+                  Здесь появятся твои имя, количество подтверждённых шагов
+                  и место после одобрения первого результата.
                 </span>
               </div>
+            )}
+          </div>
 
-              <span className="step-day-status">
-                {item.place} место
-              </span>
+          {/* ОБЩИЙ СПИСОК */}
+
+          {ratingRows.length === 0 ? (
+            <div className="step-empty-card">
+              <div className="step-empty-icon">🏆</div>
+
+              <h2>Пока нет рейтинга</h2>
+
+              <p>
+                Таблица лидеров появится после одобрения первых результатов.
+              </p>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="step-days-card">
+              {ratingRows.map(item => (
+                <div
+                  className="step-day"
+                  key={item.vkUserId}
+                >
+                  {/* НОМЕР МЕСТА */}
+
+                  <div className="step-day-number">
+                    {item.place}
+                  </div>
+
+                  {/* ИМЯ И КОЛИЧЕСТВО ШАГОВ */}
+
+                  <div className="step-day-info">
+                    <strong>
+                      {[
+                        item.firstName,
+                        item.lastName,
+                      ].filter(Boolean).join(' ') || 'Участник'}
+                    </strong>
+
+                    <span>
+                      {formatNumber(item.steps)} шагов
+                    </span>
+                  </div>
+
+                  {/* ГРУППА ИЗ БАЗЫ */}
+
+                  <span className="step-day-status">
+                    {item.group
+                      ? `${item.group} группа`
+                      : 'Группа не указана'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
+};
 
   /* =====================================
      ПРОФИЛЬ
