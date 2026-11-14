@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Panel, PanelHeader } from '@vkontakte/vkui';
 import PropTypes from 'prop-types';
+import logo from '../assets/logo.png';
 import {
   getGasJsonp,
   postGasForm,
@@ -10,7 +11,6 @@ import {
   moderateSubmission,
 } from '../utils/api';
 import './Home.css';
-import logo from '../assets/logo.png';
 
 const MODERATOR_VK_ID = '620583350';
 
@@ -718,12 +718,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      РЕГИСТРАЦИЯ
-  ===================================== */
+===================================== */
 
   const openRegistrationForm = () => {
     if (!hasSignedLaunchParams) {
       setRegistrationMessage(
-        'Для регистрации открой приложение «10 000 шагов» непосредственно через VK.'
+        'Для регистрации открой STEP CHALLENGE непосредственно через VK.'
       );
 
       setRegistrationMessageType('error');
@@ -746,7 +746,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
     if (!hasSignedLaunchParams) {
       setRegistrationMessage(
-        'Для регистрации открой приложение «10 000 шагов» непосредственно через VK.'
+        'Для регистрации открой STEP CHALLENGE непосредственно через VK.'
       );
 
       setRegistrationMessageType('error');
@@ -845,7 +845,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СКРИНШОТ
-  ===================================== */
+===================================== */
 
   const removeScreenshot = () => {
     if (screenshotPreview) {
@@ -902,12 +902,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ОТПРАВКА РЕЗУЛЬТАТА
-  ===================================== */
+===================================== */
 
   const handleSubmitResult = async () => {
     if (!hasSignedLaunchParams) {
       setSubmissionMessage(
-        'Открой приложение «10 000 шагов» непосредственно через VK.'
+        'Открой STEP CHALLENGE непосредственно через VK.'
       );
 
       setSubmissionMessageType('error');
@@ -1048,7 +1048,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      МОДЕРАЦИЯ: ЗАГРУЗИТЬ СКРИНШОТ
-  ===================================== */
+===================================== */
 
   const handleLoadModerationImage = async submissionId => {
     if (moderationImages[submissionId]) {
@@ -1098,7 +1098,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      МОДЕРАЦИЯ: КОММЕНТАРИЙ
-  ===================================== */
+===================================== */
 
   const handleModerationCommentChange = (
     submissionId,
@@ -1112,7 +1112,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      МОДЕРАЦИЯ: РЕШЕНИЕ
-  ===================================== */
+===================================== */
 
   const handleModerationDecision = async (
     submission,
@@ -1195,14 +1195,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     }
   };
 
-
   /* =====================================
      ГЛАВНАЯ СТРАНИЦА
-  ===================================== */
+===================================== */
 
   const renderHome = () => (
     <>
-      <section className="step-hero" style={{ minHeight: 'auto', justifyContent: 'flex-start' }}>
+      <section className="step-hero">
         <div className="step-hero-decoration step-decoration-one" />
         <div className="step-hero-decoration step-decoration-two" />
 
@@ -2092,5 +2091,761 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СТРАНИЦА МОДЕРАЦИИ
-  ===================================== */
-}
+===================================== */
+
+  const renderModeration = () => (
+    <section
+      className="step-inner-page"
+      style={{ paddingBottom: '30px' }}
+    >
+      <button
+        type="button"
+        onClick={() => setActiveTab('profile')}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          padding: '8px 0',
+          color: 'var(--vkui--color_text_link, #2678d8)',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        ← В профиль
+      </button>
+
+      <span className="step-overline">
+        ПАНЕЛЬ АДМИНИСТРАТОРА
+      </span>
+
+      <h1>Модерация</h1>
+
+      <p className="step-page-description">
+        Проверяй скриншоты студентов, одобряй или отклоняй
+        результаты и оставляй комментарии.
+      </p>
+
+      {moderationMessage && (
+        <div style={{
+          padding: '12px',
+          margin: '14px 0',
+          borderRadius: '12px',
+          background: 'var(--vkui--color_background_secondary, #f3f4f5)',
+          color: 'var(--vkui--color_text_primary, #222)',
+          fontSize: '13px',
+        }}>
+          {moderationMessage}
+        </div>
+      )}
+
+      {moderationError && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px',
+            margin: '14px 0',
+            borderRadius: '12px',
+            background: '#fff0ef',
+            color: '#b43b32',
+            fontSize: '13px',
+          }}
+        >
+          {moderationError}
+        </div>
+      )}
+
+      {moderationLoading ? (
+        <div className="step-empty-card">
+          <p>Загружаем заявки...</p>
+        </div>
+      ) : moderationSubmissions.length === 0 ? (
+        <div className="step-empty-card">
+          <div className="step-empty-icon">✓</div>
+
+          <h2>Очередь пуста</h2>
+
+          <p>
+            Сейчас нет заявок, ожидающих проверки.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setModerationReloadKey(value => value + 1)}
+            style={{
+              marginTop: '12px',
+              padding: '10px 16px',
+              border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+              borderRadius: '10px',
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          >
+            Обновить
+          </button>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            margin: '18px 0 12px',
+          }}>
+            <strong>
+              Ожидают проверки: {moderationSubmissions.length}
+            </strong>
+
+            <button
+              type="button"
+              onClick={() => setModerationReloadKey(value => value + 1)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--vkui--color_text_link, #2678d8)',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Обновить
+            </button>
+          </div>
+
+          {moderationSubmissions.map(submission => {
+            const image = moderationImages[submission.id];
+
+            const imageLoading =
+              Boolean(moderationImageLoading[submission.id]);
+
+            const busy =
+              moderationBusyId === submission.id;
+
+            return (
+              <article
+                key={submission.id}
+                style={{
+                  padding: '15px',
+                  marginBottom: '15px',
+                  borderRadius: '16px',
+                  border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+                  background: 'var(--vkui--color_background_content, #fff)',
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                }}>
+                  <div>
+                    <strong style={{
+                      display: 'block',
+                      fontSize: '16px',
+                    }}>
+                      {submission.participant || 'Участник'}
+                    </strong>
+
+                    <span style={{
+                      display: 'block',
+                      marginTop: '4px',
+                      fontSize: '12px',
+                      opacity: 0.65,
+                    }}>
+                      VK ID: {submission.vkUserId}
+                    </span>
+                  </div>
+
+                  <span style={{
+                    padding: '5px 8px',
+                    borderRadius: '8px',
+                    background: '#fff4d7',
+                    color: '#946b13',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    На проверке
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '10px',
+                  marginTop: '14px',
+                  fontSize: '13px',
+                }}>
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Дата результата
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {submission.date}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Количество шагов
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {formatNumber(submission.steps)}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Время телефона
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {submission.phoneTime || 'Не указано'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span style={{ opacity: 0.6 }}>
+                      Получено сервером
+                    </span>
+
+                    <strong style={{
+                      display: 'block',
+                      marginTop: '3px',
+                    }}>
+                      {formatDateTime(submission.submittedAt)}
+                    </strong>
+                  </div>
+                </div>
+
+                {!image && (
+                  <button
+                    type="button"
+                    disabled={imageLoading}
+                    onClick={() => handleLoadModerationImage(submission.id)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      marginTop: '15px',
+                      padding: '12px',
+                      border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+                      borderRadius: '10px',
+                      background: 'var(--vkui--color_background_secondary, #f3f4f5)',
+                      color: 'var(--vkui--color_text_primary, #222)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {imageLoading
+                      ? 'Загружаем изображение...'
+                      : 'Показать скриншот'}
+                  </button>
+                )}
+
+                {image && (
+                  <div style={{
+                    marginTop: '14px',
+                  }}>
+                    <img
+                      src={image}
+                      alt={`Скриншот ${submission.participant}`}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        maxHeight: '600px',
+                        objectFit: 'contain',
+                        borderRadius: '10px',
+                        background: '#eee',
+                      }}
+                    />
+                  </div>
+                )}
+
+                <label
+                  htmlFor={`moderation-comment-${submission.id}`}
+                  style={{
+                    display: 'block',
+                    margin: '16px 0 7px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Комментарий модератора
+                </label>
+
+                <textarea
+                  id={`moderation-comment-${submission.id}`}
+                  value={moderationComments[submission.id] || ''}
+                  onChange={event =>
+                    handleModerationCommentChange(
+                      submission.id,
+                      event.target.value
+                    )
+                  }
+                  placeholder="Например: дата на скриншоте не совпадает..."
+                  rows={3}
+                  maxLength={1000}
+                  disabled={busy}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '11px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--vkui--color_field_border, #c8c8c8)',
+                    background: 'var(--vkui--color_field_background, #fff)',
+                    color: 'var(--vkui--color_text_primary, #222)',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    fontSize: '13px',
+                  }}
+                />
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '9px',
+                  marginTop: '12px',
+                }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      handleModerationDecision(
+                        submission,
+                        'Одобрено'
+                      )
+                    }
+                    style={{
+                      padding: '12px 8px',
+                      border: 'none',
+                      borderRadius: '10px',
+                      background: '#dff5e5',
+                      color: '#176b32',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {busy ? 'Сохраняем...' : '✓ Одобрить'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      handleModerationDecision(
+                        submission,
+                        'Отклонено'
+                      )
+                    }
+                    style={{
+                      padding: '12px 8px',
+                      border: 'none',
+                      borderRadius: '10px',
+                      background: '#ffe7e5',
+                      color: '#b43b32',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {busy ? 'Сохраняем...' : '✕ Отклонить'}
+                  </button>
+                </div>
+
+                <p style={{
+                  margin: '9px 0 0',
+                  fontSize: '11px',
+                  opacity: 0.6,
+                  lineHeight: 1.4,
+                }}>
+                  При отклонении необходимо указать причину в комментарии.
+                </p>
+              </article>
+            );
+          })}
+        </>
+      )}
+    </section>
+  );
+
+  /* =====================================
+     РЕЙТИНГ
+===================================== */
+
+  const renderRating = () => (
+    <section className="step-inner-page">
+      <span className="step-overline">
+        STEP CHALLENGE
+      </span>
+
+      <h1>Рейтинг</h1>
+
+      <p className="step-page-description">
+        Здесь учитываются только результаты, одобренные модератором.
+      </p>
+
+      {ratingLoading ? (
+        <div className="step-empty-card">
+          <p>Загружаем рейтинг...</p>
+        </div>
+      ) : ratingRows.length === 0 ? (
+        <div className="step-empty-card">
+          <div className="step-empty-icon">🏆</div>
+
+          <h2>Пока нет рейтинга</h2>
+
+          <p>
+            Таблица лидеров появится после одобрения первых результатов.
+          </p>
+        </div>
+      ) : (
+        <div className="step-days-card">
+          {ratingRows.map(item => (
+            <div className="step-day" key={item.vkUserId}>
+              <div className="step-day-number">
+                {item.place <= 3
+                  ? ['🥇', '🥈', '🥉'][item.place - 1]
+                  : item.place}
+              </div>
+
+              <div className="step-day-info">
+                <strong>
+                  {[
+                    item.firstName,
+                    item.lastName,
+                  ].filter(Boolean).join(' ') || 'Участник'}
+                </strong>
+
+                <span>
+                  {formatNumber(item.steps)} шагов
+                </span>
+              </div>
+
+              <span className="step-day-status">
+                {item.place} место
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+
+  /* =====================================
+     ПРОФИЛЬ
+===================================== */
+
+  const renderProfile = () => (
+    <section className="step-inner-page">
+      <span className="step-overline">
+        ЛИЧНЫЙ КАБИНЕТ
+      </span>
+
+      <h1>Мой профиль</h1>
+
+      <div className="step-profile-card">
+        <div className="step-avatar-large">
+          {photo_200 ? (
+            <img
+              src={photo_200}
+              alt="Аватар пользователя"
+            />
+          ) : (
+            initials
+          )}
+        </div>
+
+        <h2>{fullName}</h2>
+
+        {city?.title && (
+          <p>{city.title}</p>
+        )}
+
+        {(registeredParticipant?.group || registrationGroup) && (
+          <p>Группа {registeredParticipant?.group || registrationGroup}</p>
+        )}
+
+        <span className="step-profile-status">
+          {isRegistered
+            ? 'Участник челленджа'
+            : 'Пока не зарегистрирован'}
+        </span>
+      </div>
+
+      <div className="step-profile-info">
+        <div>
+          <span>Ежедневная цель</span>
+          <strong>10 000 шагов</strong>
+        </div>
+
+        <div>
+          <span>Продолжительность</span>
+          <strong>5 дней</strong>
+        </div>
+
+        <div>
+          <span>Статус участия</span>
+          <strong>
+            {isRegistered ? 'Участвует' : 'Не участвует'}
+          </strong>
+        </div>
+      </div>
+
+      {isModerator && (
+        <div style={{
+          marginTop: '18px',
+          padding: '15px',
+          borderRadius: '15px',
+          border: '1px solid var(--vkui--color_separator_primary, #ddd)',
+        }}>
+          <span className="step-overline">
+            ADMIN PANEL
+          </span>
+
+          <h2 style={{
+            margin: '5px 0 12px',
+          }}>
+            Панель модератора
+          </h2>
+
+          <p style={{
+            fontSize: '13px',
+            lineHeight: 1.5,
+            opacity: 0.7,
+          }}>
+            Проверяй скриншоты участников и управляй результатами челленджа.
+          </p>
+
+          <button
+            type="button"
+            className="step-primary-button"
+            onClick={() => {
+              setActiveTab('moderation');
+              setModerationMessage('');
+              setModerationError('');
+            }}
+            style={{
+              width: '100%',
+              marginTop: '10px',
+            }}
+          >
+            Модерация
+            <span>↗</span>
+          </button>
+        </div>
+      )}
+    </section>
+  );
+
+  /* =====================================
+     ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
+===================================== */
+
+  if (profileLoading || !registrationChecked) {
+    return (
+      <Panel
+        id={id}
+        className="step-panel"
+      >
+        <PanelHeader>STEP CHALLENGE</PanelHeader>
+
+        <style>
+          {`
+            @keyframes stepLoaderSpin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            @keyframes stepLoaderPulse {
+              0%, 100% {
+                opacity: 0.45;
+                transform: scale(0.96);
+              }
+              50% {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+            @keyframes stepLoaderFade {
+              from {
+                opacity: 0;
+                transform: translateY(8px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          `}
+        </style>
+
+        <div style={{
+          minHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          animation: 'stepLoaderFade 0.5s ease both',
+        }}>
+          <img
+            src={logo}
+            alt="10 000 шагов"
+            style={{
+              width: '88px',
+              height: '88px',
+              objectFit: 'contain',
+              animation: 'stepLoaderPulse 1.8s ease-in-out infinite',
+            }}
+          />
+
+          <div style={{
+            width: '30px',
+            height: '30px',
+            marginTop: '30px',
+            border: '3px solid rgba(120, 140, 100, 0.18)',
+            borderTopColor: '#8bbd3c',
+            borderRadius: '50%',
+            animation: 'stepLoaderSpin 0.8s linear infinite',
+          }} />
+
+          <h2 style={{
+            margin: '22px 0 7px',
+            fontSize: '21px',
+            fontWeight: 800,
+          }}>
+            10 000 шагов
+          </h2>
+
+          <p style={{
+            margin: 0,
+            fontSize: '13px',
+            opacity: 0.65,
+          }}>
+            Загружаем твой профиль VK...
+          </p>
+        </div>
+      </Panel>
+    );
+  }
+
+  /* =====================================
+     ОСНОВНОЙ ИНТЕРФЕЙС
+===================================== */
+
+  return (
+    <Panel
+      id={id}
+      className="step-panel"
+    >
+      <PanelHeader>Челлендж | ТПК</PanelHeader>
+
+      <div className="step-page">
+        <header className="step-header">
+          <div className="step-brand">
+            <img
+              src={logo}
+              alt="10 000 шагов"
+              style={{
+                display: 'block',
+                width: '132px',
+                maxWidth: '42vw',
+                height: '48px',
+                objectFit: 'contain',
+              }}
+            />
+          </div>
+
+          <div className="step-header-user">
+            <div className="step-header-user-text">
+              <span>Привет,</span>
+              <strong>{displayFirstName || 'участник'}</strong>
+            </div>
+
+            <div className="step-avatar">
+              {photo_200 ? (
+                <img src={photo_200} alt="" />
+              ) : (
+                initials
+              )}
+            </div>
+          </div>
+        </header>
+
+        {activeTab === 'home' && renderHome()}
+        {activeTab === 'submit' && renderSubmit()}
+        {activeTab === 'rating' && renderRating()}
+        {activeTab === 'profile' && renderProfile()}
+
+        {activeTab === 'moderation' && (
+          isModerator
+            ? renderModeration()
+            : renderProfile()
+        )}
+
+        <nav className="step-bottom-nav">
+          <button
+            type="button"
+            className={activeTab === 'home' ? 'active' : ''}
+            onClick={() => setActiveTab('home')}
+          >
+            <span className="step-nav-icon">⌂</span>
+            <span>Главная</span>
+          </button>
+
+          <button
+            type="button"
+            className={activeTab === 'rating' ? 'active' : ''}
+            onClick={() => setActiveTab('rating')}
+          >
+            <span className="step-nav-icon">♕</span>
+            <span>Рейтинг</span>
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab === 'profile' ||
+              activeTab === 'moderation'
+                ? 'active'
+                : ''
+            }
+            onClick={() => setActiveTab('profile')}
+          >
+            <span className="step-nav-icon">♙</span>
+            <span>Профиль</span>
+          </button>
+        </nav>
+
+        <footer className="step-footer">
+          <span>Каждый шаг имеет значение.</span>
+        </footer>
+      </div>
+    </Panel>
+  );
+};
+
+Home.propTypes = {
+  id: PropTypes.string.isRequired,
+
+  fetchedUser: PropTypes.shape({
+    photo_200: PropTypes.string,
+    first_name: PropTypes.string,
+    last_name: PropTypes.string,
+
+    city: PropTypes.shape({
+      title: PropTypes.string,
+    }),
+  }),
+
+  launchParams: PropTypes.object,
+};
