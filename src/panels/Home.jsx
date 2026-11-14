@@ -2763,6 +2763,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 objectFit: 'contain',
               }}
             />
+            <div className="step-brand-name">
+              <strong>10 000</strong>
+              <span>шагов</span>
+            </div>
           </div>
 
           <div className="step-header-user">
