@@ -919,39 +919,133 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       </section>
 
       <section className="step-section">
-        <div className="step-section-heading">
-          <div>
-            <span className="step-overline">ТВОЯ АКТИВНОСТЬ</span>
-            <h2>Твоя цель</h2>
-          </div>
-          <span className="step-section-caption">Каждый день</span>
-        </div>
+        {(() => {
+          const DAILY_GOAL = 10000;
 
-        <div className="step-goal-card">
-          <div className="step-goal-top">
-            <span className="step-goal-icon">↗</span>
-            <span className="step-goal-status">Ожидает результатов</span>
-          </div>
+          const dayEntries = CHALLENGE_DAYS.map(day => ({
+            day,
+            submission: homeSubmissions[day.value],
+          })).filter(entry => entry.submission);
 
-          <div className="step-goal-number">
-            10 000
-            <span>шагов</span>
-          </div>
+          const approved = dayEntries.filter(
+            entry => entry.submission.status === 'Одобрено'
+          );
+          const pending = dayEntries.filter(
+            entry => entry.submission.status === 'На проверке'
+          );
+          const rejected = dayEntries.filter(
+            entry => entry.submission.status === 'Отклонено'
+          );
 
-          <div className="step-progress-track">
-            <div className="step-progress-fill" />
-          </div>
+          const bestApproved = approved.reduce(
+            (best, entry) =>
+              !best || Number(entry.submission.steps) > Number(best.submission.steps)
+                ? entry
+                : best,
+            null
+          );
 
-          <div className="step-goal-bottom">
-            <span>Данные ещё не загружены</span>
-            <span>— / 10 000</span>
-          </div>
+          const approvedSteps = bestApproved
+            ? Number(bestApproved.submission.steps) || 0
+            : 0;
 
-          <div className="step-goal-note">
-            <span>ⓘ</span>
-            Результаты появятся здесь после проверки модератором.
-          </div>
-        </div>
+          const progressPercent = Math.min(
+            100,
+            Math.round((approvedSteps / DAILY_GOAL) * 100)
+          );
+
+          let statusText = 'Ожидает результатов';
+          let statusBg = 'var(--vkui--color_background_secondary, #f0f1f3)';
+          let statusColor = 'var(--vkui--color_text_secondary, #737a85)';
+
+          if (approvedSteps >= DAILY_GOAL) {
+            statusText = 'Цель достигнута';
+            statusBg = '#e2f5e7';
+            statusColor = '#247a43';
+          } else if (pending.length > 0) {
+            statusText = 'На проверке';
+            statusBg = '#fff3d7';
+            statusColor = '#946300';
+          } else if (approved.length > 0) {
+            statusText = 'В процессе';
+            statusBg = '#eff8df';
+            statusColor = '#5d842a';
+          } else if (rejected.length > 0) {
+            statusText = 'Результат отклонён';
+            statusBg = '#ffe7e5';
+            statusColor = '#b43b32';
+          }
+
+          const hasAnyApproved = approved.length > 0;
+          const hasAnyPending = pending.length > 0;
+
+          const bottomLeft = hasAnyApproved
+            ? 'Лучший результат'
+            : hasAnyPending
+              ? 'Проверяется модератором'
+              : 'Данные ещё не загружены';
+
+          const bottomRight = hasAnyApproved
+            ? `${formatNumber(approvedSteps)} / ${formatNumber(DAILY_GOAL)}`
+            : `— / ${formatNumber(DAILY_GOAL)}`;
+
+          const noteText = approvedSteps >= DAILY_GOAL
+            ? 'Цель выполнена. Отличная работа!'
+            : hasAnyPending
+              ? 'Результат на проверке у модератора.'
+              : hasAnyApproved
+                ? 'Продолжай в том же духе — до цели осталось немного.'
+                : 'Результаты появятся здесь после проверки модератором.';
+
+          return (
+            <>
+              <div className="step-section-heading">
+                <div>
+                  <span className="step-overline">ТВОЯ АКТИВНОСТЬ</span>
+                  <h2>Твоя цель</h2>
+                </div>
+                <span className="step-section-caption">Каждый день</span>
+              </div>
+
+              <div className="step-goal-card">
+                <div className="step-goal-top">
+                  <span className="step-goal-icon">↗</span>
+                  <span
+                    className="step-goal-status"
+                    style={{ background: statusBg, color: statusColor }}
+                  >
+                    {statusText}
+                  </span>
+                </div>
+
+                <div className="step-goal-number">
+                  {formatNumber(DAILY_GOAL)}
+                  <span>шагов</span>
+                </div>
+
+                <div className="step-progress-track">
+                  <div
+                    className="step-progress-fill"
+                    style={{
+                      width: `${progressPercent}%`,
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
+
+                <div className="step-goal-bottom">
+                  <span>{bottomLeft}</span>
+                  <span>{bottomRight}</span>
+                </div>
+
+                <div className="step-goal-note">
+                  <span>ⓘ</span>
+                  {noteText}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       <section className="step-info-grid">
