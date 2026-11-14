@@ -953,6 +953,6 @@ html {
 }
 
 .step-registration-card {
-  scroll-margin-top: 30px;
+  scroll-margin-top: 80px;   /* ← отступ под шапку VK + запас */
   scroll-margin-bottom: 110px;
 }

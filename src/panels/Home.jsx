@@ -450,7 +450,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     requestAnimationFrame(() => {
       registrationCardRef.current?.scrollIntoView({
         behavior: 'smooth',
-        block: 'center',
+        block: 'start',   // было 'center' — теперь прилипаем к верху
       });
     });
   }, [registrationFormOpen, isRegistered]);
