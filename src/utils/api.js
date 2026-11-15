@@ -523,6 +523,80 @@ export async function moderateSubmission(payload) {
 
 
 /* =====================================
+   ТЕСТОВОЕ PUSH-УВЕДОМЛЕНИЕ
+===================================== */
+
+export async function sendTestNotification(
+  signedLaunchParams
+) {
+  if (
+    !signedLaunchParams?.vk_user_id ||
+    !signedLaunchParams?.vk_app_id ||
+    !signedLaunchParams?.sign
+  ) {
+    throw new Error(
+      'Не удалось получить подписанные параметры запуска VK. Перезапусти приложение через VK.'
+    );
+  }
+
+  const result = await sendGasForm(
+    {
+      action: 'test_push',
+      ...signedLaunchParams,
+    },
+    30000
+  );
+
+  if (!result?.ok) {
+    const messages = {
+      moderator_access_denied:
+        'Тестовое уведомление может отправить только модератор.',
+
+      invalid_vk_signature:
+        'VK не подтвердил подлинность запуска. Перезапусти приложение через VK.',
+
+      server_not_configured:
+        'Не настроены параметры проверки подписи VK в Apps Script.',
+
+      vk_service_key_not_configured:
+        'В настройках Apps Script не найден сервисный ключ VK. Проверь Script Properties: VK_SERVICE_KEY.',
+
+      vk_http_error:
+        'VK вернул HTTP-ошибку при отправке уведомления.',
+    };
+
+    if (result?.error === 'vk_api_error') {
+      const code = result.vkErrorCode
+        ? ` Код ошибки: ${result.vkErrorCode}.`
+        : '';
+      const details = result.vkMessage
+        ? ` ${result.vkMessage}`
+        : '';
+
+      throw new Error(
+        `VK API отклонил отправку уведомления.${code}${details}`
+      );
+    }
+
+    if (result?.error === 'vk_http_error' && result?.vkMessage) {
+      throw new Error(
+        `${messages.vk_http_error} ${result.vkMessage}`
+      );
+    }
+
+    throw new Error(
+      messages[result?.error] ||
+      result?.vkMessage ||
+      result?.error ||
+      'Не удалось отправить тестовое push-уведомление.'
+    );
+  }
+
+  return result;
+}
+
+
+/* =====================================
    СТАТУС ЧЕЛЛЕНДЖА
 ===================================== */
 

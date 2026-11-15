@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import bridge from '@vkontakte/vk-bridge';
 import { Panel, PanelHeader } from '@vkontakte/vkui';
 import PropTypes from 'prop-types';
 import logo from '../assets/logo.png';
@@ -11,6 +12,7 @@ import {
   getModerationImage,
   moderateSubmission,
   getChallengeStatus,
+  sendTestNotification,
 } from '../utils/api';
 import './Home.css';
 
@@ -176,6 +178,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [moderationComments, setModerationComments] = useState({});
   const [moderationBusyId, setModerationBusyId] = useState('');
   const [moderationReloadKey, setModerationReloadKey] = useState(0);
+
+  // Тестовые push-уведомления для модератора.
+  const [testNotificationBusy, setTestNotificationBusy] = useState(false);
+  const [testNotificationMessage, setTestNotificationMessage] = useState('');
+  const [testNotificationMessageType, setTestNotificationMessageType] = useState('');
 
   const fileInputRef = useRef(null);
 
@@ -852,6 +859,48 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       );
     } finally {
       setModerationBusyId('');
+    }
+  };
+
+  /* =====================================
+     ТЕСТОВОЕ PUSH-УВЕДОМЛЕНИЕ
+  ===================================== */
+  const handleSendTestNotification = async () => {
+    if (!isModerator || testNotificationBusy) return;
+
+    if (!hasSignedLaunchParams) {
+      setTestNotificationMessage(
+        'Не найдены подписанные параметры запуска VK. Закрой и заново открой приложение непосредственно через VK.'
+      );
+      setTestNotificationMessageType('error');
+      return;
+    }
+
+    setTestNotificationBusy(true);
+    setTestNotificationMessage('Отправляем тестовое уведомление через VK...');
+    setTestNotificationMessageType('info');
+
+    try {
+      // Сначала запрашиваем у пользователя разрешение на уведомления VK.
+      await bridge.send('VKWebAppAllowNotifications');
+
+      const result = await sendTestNotification(signedLaunchParams);
+      const vkResponse = result?.vkResponse !== undefined
+        ? ` Ответ API: ${JSON.stringify(result.vkResponse)}.`
+        : '';
+
+      setTestNotificationMessage(
+        `${result?.message || 'VK принял запрос на отправку.'}${vkResponse} Проверь, появилось ли уведомление в VK.`
+      );
+      setTestNotificationMessageType('success');
+    } catch (error) {
+      console.error('Ошибка отправки тестового push-уведомления:', error);
+      setTestNotificationMessage(
+        error.message || 'Не удалось отправить тестовое push-уведомление.'
+      );
+      setTestNotificationMessageType('error');
+    } finally {
+      setTestNotificationBusy(false);
     }
   };
 
@@ -1968,6 +2017,46 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <p style={{ fontSize: '13px', lineHeight: 1.5, opacity: 0.7 }}>
             Проверяй скриншоты участников и управляй результатами челленджа.
           </p>
+
+          <button
+            type="button"
+            className="step-primary-button"
+            onClick={handleSendTestNotification}
+            disabled={testNotificationBusy || !hasSignedLaunchParams}
+            style={{ width: '100%', marginTop: '10px' }}
+          >
+            {testNotificationBusy
+              ? 'Отправляем уведомление...'
+              : 'Отправить тестовое push-уведомление'}
+            <span>{testNotificationBusy ? '…' : '↗'}</span>
+          </button>
+
+          {!hasSignedLaunchParams && (
+            <p style={{
+              margin: '8px 0 0', fontSize: '11px', lineHeight: 1.45,
+              color: 'var(--vkui--color_text_secondary, #777)',
+            }}>
+              Для отправки открой приложение непосредственно через VK.
+            </p>
+          )}
+
+          {testNotificationMessage && (
+            <p
+              role={testNotificationMessageType === 'error' ? 'alert' : 'status'}
+              style={{
+                margin: '10px 0 0', fontSize: '12px', lineHeight: 1.5,
+                color: testNotificationMessageType === 'error'
+                  ? '#c34b43'
+                  : testNotificationMessageType === 'success'
+                    ? '#247a43'
+                    : 'var(--vkui--color_text_secondary, #777)',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {testNotificationMessage}
+            </p>
+          )}
+
           <button
             type="button"
             className="step-primary-button"
@@ -2278,9 +2367,10 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   }
 
   /* =====================================
-     ЧЕЛЛЕНДЖ НЕАКТИВЕН — ЗАГЛУШКА (для всех)
+     ЧЕЛЛЕНДЖ НЕАКТИВЕН — ЗАГЛУШКА (для участников)
+     Модератору оставляем доступ к профилю и тесту push.
   ===================================== */
-  if (challengeActive === false) {
+  if (challengeActive === false && !(isModerator && hasSignedLaunchParams)) {
     return (
       <Panel id={id} className="step-panel">
         <PanelHeader>Челлендж | ТПК</PanelHeader>
