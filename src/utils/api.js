@@ -3,6 +3,9 @@ const API_URL =
 
 let callbackCounter = 0;
 
+// Не допускаем параллельные POST-регистрации одного VK ID.
+const registrationRequests = new Map();
+
 
 /* =====================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -228,45 +231,192 @@ function sendGasForm(payload, timeoutMs = 30000) {
 
 
 /* =====================================
+   ОТПРАВКА И ПРОВЕРКА РЕГИСТРАЦИИ
+===================================== */
+
+/**
+ * Подтверждение регистрации через фактическую запись в Google Таблице.
+ * Ответ POST-iframe больше не является обязательным условием успеха.
+ */
+async function registerParticipantWithVerification(payload, userId) {
+  const body = new URLSearchParams();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      body.append(key, String(value));
+    }
+  });
+
+  const controller = new AbortController();
+  const postTimeout = setTimeout(() => {
+    controller.abort();
+  }, 15000);
+
+  let postError = null;
+
+  try {
+    // Запрос отправляется как обычная HTML-форма.
+    // Из-за CORS ответ непрозрачный: читать его не нужно.
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      redirect: 'follow',
+      credentials: 'omit',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+
+  } catch (error) {
+    // Даже при сетевой ошибке POST мог успеть дойти до Apps Script.
+    // Поэтому сначала всё равно проверяем таблицу через GET participant.
+    postError = error;
+    console.warn(
+      'POST регистрации не вернул сетевое подтверждение. Проверяем запись в таблице:',
+      error
+    );
+
+  } finally {
+    clearTimeout(postTimeout);
+  }
+
+  let lastCheckError = null;
+
+  // Apps Script может записать строку чуть позже завершения POST.
+  // Несколько проверок позволяют дождаться появления участника.
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    try {
+      const participantResult = await getGasJsonp(
+        'participant',
+        { vk_user_id: userId },
+        8000
+      );
+
+      if (!participantResult?.ok) {
+        throw new Error(
+          participantResult?.error ||
+          'Не удалось проверить запись участника.'
+        );
+      }
+
+      // Последний GET прошёл успешно: прежняя временная ошибка
+      // больше не должна влиять на итоговый результат.
+      lastCheckError = null;
+
+      if (participantResult.registered) {
+        const participant = participantResult.participant || null;
+        const disqualified = participant?.status === 'disqualified';
+
+        // Статистика вспомогательная. Её сбой не отменяет регистрацию.
+        let registeredCount;
+
+        try {
+          const stats = await getGasJsonp('stats', {}, 8000);
+
+          if (
+            stats?.ok &&
+            Number.isFinite(Number(stats.registeredCount))
+          ) {
+            registeredCount = Number(stats.registeredCount);
+          }
+
+        } catch (statsError) {
+          console.warn(
+            'Регистрация подтверждена, но статистику участников загрузить не удалось:',
+            statsError
+          );
+        }
+
+        return {
+          ok: true,
+          status: disqualified
+            ? 'disqualified'
+            : 'registered',
+          message: disqualified
+            ? 'Вы дисквалифицированы и не можете отправлять новые результаты.'
+            : 'Регистрация успешно подтверждена Google Таблицей!',
+          ...(registeredCount !== undefined
+            ? { registeredCount }
+            : {}),
+          participant,
+        };
+      }
+
+    } catch (error) {
+      lastCheckError = error;
+    }
+
+    if (attempt < 8) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 500 + attempt * 500);
+      });
+    }
+  }
+
+  if (lastCheckError) {
+    throw new Error(
+      'Запрос регистрации был отправлен, но не удалось проверить запись в Google Таблице: ' +
+      lastCheckError.message
+    );
+  }
+
+  if (postError) {
+    const detail = postError.name === 'AbortError'
+      ? 'Время отправки запроса истекло.'
+      : 'Не удалось подтвердить отправку запроса.';
+
+    throw new Error(
+      detail +
+      ' Участник не появился в Google Таблице. Проверь интернет-соединение и журнал выполнений Apps Script.'
+    );
+  }
+
+  throw new Error(
+    'Google Apps Script получил запрос, но участник не появился в Google Таблице. Проверь журнал выполнений Apps Script.'
+  );
+}
+
+
+/* =====================================
    РЕГИСТРАЦИЯ
 ===================================== */
 
-export async function postGasForm(payload) {
+export function postGasForm(payload) {
   const userId = String(
-    payload.vk_user_id || ''
+    payload?.vk_user_id || ''
   );
 
   if (!/^\d+$/.test(userId)) {
-    throw new Error(
-      'Некорректный VK ID пользователя'
+    return Promise.reject(
+      new Error('Некорректный VK ID пользователя')
     );
   }
 
-  if (payload.action !== 'register') {
-    throw new Error(
-      'Неизвестная операция регистрации'
+  if (payload?.action !== 'register') {
+    return Promise.reject(
+      new Error('Неизвестная операция регистрации')
     );
   }
 
-  const result = await sendGasForm(
+  // Повторный вызов для того же VK ID использует уже выполняющийся запрос.
+  const existingRequest = registrationRequests.get(userId);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = registerParticipantWithVerification(
     payload,
-    30000
-  );
+    userId
+  ).finally(() => {
+    registrationRequests.delete(userId);
+  });
 
-  if (!result?.ok) {
-    throw new Error(
-      result?.error ||
-      'Google Apps Script отклонил регистрацию.'
-    );
-  }
+  registrationRequests.set(userId, request);
 
-  const stats = await getGasJsonp('stats');
-
-  return {
-    ...result,
-    registeredCount:
-      Number(stats?.registeredCount) || 0,
-  };
+  return request;
 }
 
 
@@ -523,6 +673,31 @@ export async function moderateSubmission(payload) {
 
 
 /* =====================================
+   СТАТУС ЧЕЛЛЕНДЖА
+===================================== */
+
+export async function getChallengeStatus(timeoutMs = 15000) {
+  try {
+    const result = await getGasJsonp(
+      'challenge_status',
+      {},
+      timeoutMs
+    );
+
+    if (!result?.ok) {
+      // Безопасный фолбэк: если сервер не ответил — считаем неактивным.
+      return { active: false, error: result?.error };
+    }
+
+    return { active: Boolean(result.active) };
+  } catch (error) {
+    console.warn('Не удалось получить статус челленджа:', error);
+    return { active: false, error: error.message };
+  }
+}
+
+
+/* =====================================
    ТЕСТОВОЕ PUSH-УВЕДОМЛЕНИЕ
 ===================================== */
 
@@ -593,29 +768,4 @@ export async function sendTestNotification(
   }
 
   return result;
-}
-
-
-/* =====================================
-   СТАТУС ЧЕЛЛЕНДЖА
-===================================== */
-
-export async function getChallengeStatus(timeoutMs = 15000) {
-  try {
-    const result = await getGasJsonp(
-      'challenge_status',
-      {},
-      timeoutMs
-    );
-
-    if (!result?.ok) {
-      // Безопасный фолбэк: если сервер не ответил — считаем неактивным.
-      return { active: false, error: result?.error };
-    }
-
-    return { active: Boolean(result.active) };
-  } catch (error) {
-    console.warn('Не удалось получить статус челленджа:', error);
-    return { active: false, error: error.message };
-  }
 }
