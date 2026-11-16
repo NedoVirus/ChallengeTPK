@@ -74,7 +74,7 @@ export function getGasJsonp(
 
       reject(
         new Error(
-          'Не удалось подключиться к Google Apps Script'
+          'Не удалось подключиться к серверу.'
         )
       );
     };
@@ -84,7 +84,7 @@ export function getGasJsonp(
 
       reject(
         new Error(
-          'Google Apps Script не ответил за 15 секунд. Проверь подключение и журнал выполнений.'
+          'Сервер не ответил за 15 секунд. Проверь подключение и журнал выполнений.'
         )
       );
     }, timeoutMs);
@@ -187,7 +187,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
         finish(
           reject,
           new Error(
-            'Google Apps Script вернул некорректный ответ.'
+            'Сервер вернул некорректный ответ.'
           )
         );
 
@@ -206,7 +206,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
       finish(
         reject,
         new Error(
-          'Google Apps Script не ответил на POST-запрос. Проверь версию веб-развёртывания.'
+          'Сервер не ответил на POST-запрос. Проверь версию веб-развёртывания.'
         )
       );
     }, timeoutMs);
@@ -336,7 +336,7 @@ async function registerParticipantWithVerification(payload, userId) {
             : 'registered',
           message: disqualified
             ? 'Вы дисквалифицированы и не можете отправлять новые результаты.'
-            : 'Регистрация успешно подтверждена Google Таблицей!',
+            : 'Регистрация успешно подтверждена!',
           ...(registeredCount !== undefined
             ? { registeredCount }
             : {}),
@@ -357,7 +357,7 @@ async function registerParticipantWithVerification(payload, userId) {
 
   if (lastCheckError) {
     throw new Error(
-      'Запрос регистрации был отправлен, но не удалось проверить запись в Google Таблице: ' +
+      'Запрос регистрации был отправлен, но не удалось проверить запись в Базе Данных: ' +
       lastCheckError.message
     );
   }
@@ -369,12 +369,12 @@ async function registerParticipantWithVerification(payload, userId) {
 
     throw new Error(
       detail +
-      ' Участник не появился в Google Таблице. Проверь интернет-соединение и журнал выполнений Apps Script.'
+      ' Участник не появился в Базе Данных. Проверь интернет-соединение и журнал выполнений на сервере.'
     );
   }
 
   throw new Error(
-    'Google Apps Script получил запрос, но участник не появился в Google Таблице. Проверь журнал выполнений Apps Script.'
+    'Сервер получил запрос, но участник не появился в Базе Данных. Проверь журнал выполнений на сервере.'
   );
 }
 
@@ -492,7 +492,7 @@ export async function submitStepsResult(payload) {
         'Не удалось прочитать изображение.',
 
       server_not_configured:
-        'Не настроены параметры VK в Apps Script.',
+        'Не настроены параметры VK на сервере.',
 
       vk_signature_missing:
         'Не найдена подпись VK. Перезапусти приложение через VK.',
@@ -522,7 +522,7 @@ export async function submitStepsResult(payload) {
         'Размер изображения превышает допустимый.',
 
       database_not_configured:
-        'Не настроена Google Таблица.',
+        'Не настроена База Данных.',
     };
 
     throw new Error(
@@ -582,7 +582,7 @@ export async function getModerationQueue(
         'Не удалось подтвердить аккаунт VK.',
 
       server_not_configured:
-        'Не настроены параметры VK в Apps Script.',
+        'Не настроены параметры VK на сервере.',
     };
 
     throw new Error(
@@ -745,10 +745,10 @@ export async function sendTestNotification(
         'VK не подтвердил подлинность запуска. Перезапусти приложение через VK.',
 
       server_not_configured:
-        'Не настроены параметры проверки подписи VK в Apps Script.',
+        'Не настроены параметры проверки подписи VK на сервере.',
 
       vk_service_key_not_configured:
-        'В настройках Apps Script не найден сервисный ключ VK. Проверь Script Properties: VK_SERVICE_KEY.',
+        'В настройках сервера не найден сервисный ключ VK. Проверь Script Properties: VK_SERVICE_KEY.',
 
       vk_http_error:
         'VK вернул HTTP-ошибку при отправке уведомления.',
