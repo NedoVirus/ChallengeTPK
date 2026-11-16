@@ -11,7 +11,6 @@ import { useActiveVkuiLocation } from '@vkontakte/vk-mini-apps-router';
 
 import { Home } from './panels';
 import { DEFAULT_VIEW_PANELS } from './routes';
-import { SensorTest } from './SensorTest';
 
 export const App = () => {
   const {

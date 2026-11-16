@@ -50,31 +50,319 @@ const IOS_VK_PLATFORMS = new Set([
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-const ERROR_MESSAGES = {
-  server_not_configured: 'Не настроены VK_APP_ID или VK_APP_SECRET в Apps Script.',
-  vk_signature_missing: 'Отсутствует подпись запуска VK. Открой приложение через VK.',
-  vk_params_missing: 'Не удалось получить параметры запуска VK.',
-  invalid_vk_app_id: 'ID приложения VK не совпадает с настройками сервера.',
-  invalid_vk_user_id: 'Не удалось определить пользователя VK.',
-  invalid_vk_signature: 'VK не подтвердил подлинность запуска. Перезапусти приложение.',
-  unknown_action: 'Неизвестная операция сервера.',
-  challenge_inactive: 'Челлендж сейчас неактивен. Активностей нет.',
-  participant_not_registered: 'Сначала необходимо зарегистрироваться в челлендже.',
-  participant_disqualified: 'Ты дисквалифицирован. Отправка новых результатов недоступна.',
-  invalid_challenge_date: 'Выбрана дата вне периода челленджа.',
-  future_challenge_date: 'Результат за этот день пока нельзя отправить.',
-  challenge_not_active: 'Челлендж не активен на выбранную дату.',
-  invalid_steps: 'Укажи количество шагов от 1 до 100 000.',
-  invalid_image_type: 'Можно загрузить только JPG, PNG или WEBP.',
-  invalid_image_size: 'Размер скриншота не должен превышать 4 МБ.',
-  invalid_image_data: 'Не удалось прочитать изображение. Выбери скриншот ещё раз.',
-  moderator_access_denied: 'У этого аккаунта нет доступа к модерации.',
-  submission_not_found: 'Заявка не найдена.',
-  submission_already_reviewed: 'Эта заявка уже была проверена.',
-  invalid_first_name: 'Укажи имя участника.',
-  invalid_last_name: 'Укажи фамилию участника.',
-  invalid_group: 'Укажи номер группы цифрами.',
+const ERROR_DETAILS = {
+  // Вход и проверка аккаунта.
+  server_not_configured: {
+    code: 'SYS-01',
+    message: 'Сервис временно недоступен. Попробуй позже или сообщи организатору.',
+  },
+  vk_signature_missing: {
+    code: 'AUTH-01',
+    message: 'Не удалось подтвердить вход. Закрой приложение и открой его заново через VK.',
+  },
+  vk_params_missing: {
+    code: 'AUTH-01',
+    message: 'Не удалось подтвердить вход. Открой приложение непосредственно через VK.',
+  },
+  invalid_vk_app_id: {
+    code: 'AUTH-01',
+    message: 'Не удалось подтвердить вход. Закрой приложение и открой его заново через VK.',
+  },
+  invalid_vk_user_id: {
+    code: 'AUTH-02',
+    message: 'Не удалось определить твой аккаунт. Перезапусти приложение через VK.',
+  },
+  invalid_user_id: {
+    code: 'AUTH-02',
+    message: 'Не удалось определить твой аккаунт. Перезапусти приложение через VK.',
+  },
+  invalid_vk_signature: {
+    code: 'AUTH-01',
+    message: 'Не удалось подтвердить вход. Закрой приложение и открой его заново через VK.',
+  },
+  'Некорректный VK ID пользователя': {
+    code: 'AUTH-02',
+    message: 'Не удалось определить твой аккаунт. Перезапусти приложение через VK.',
+  },
+  'Не удалось определить VK ID пользователя': {
+    code: 'AUTH-02',
+    message: 'Не удалось определить твой аккаунт. Перезапусти приложение через VK.',
+  },
+  'Неизвестная операция регистрации': {
+    code: 'SYS-02',
+    message: 'Не удалось обработать запрос. Обнови приложение и попробуй снова.',
+  },
+  'Неизвестная операция отправки результата': {
+    code: 'SYS-02',
+    message: 'Не удалось обработать запрос. Обнови приложение и попробуй снова.',
+  },
+  'Не удалось определить пользователя VK': {
+    code: 'AUTH-02',
+    message: 'Не удалось определить твой аккаунт. Перезапусти приложение через VK.',
+  },
+
+  // Регистрация.
+  invalid_first_name: {
+    code: 'REG-01',
+    message: 'Укажи имя участника.',
+  },
+  invalid_last_name: {
+    code: 'REG-02',
+    message: 'Укажи фамилию участника.',
+  },
+  invalid_group: {
+    code: 'REG-03',
+    message: 'Укажи номер группы цифрами или отметь пункт «Сотрудник».',
+  },
+  invalid_name_length: {
+    code: 'REG-05',
+    message: 'Имя и фамилия не должны быть длиннее 40 символов.',
+  },
+  registration_failed: {
+    code: 'REG-04',
+    message: 'Не удалось завершить регистрацию. Проверь подключение и попробуй ещё раз.',
+  },
+  registration_not_confirmed: {
+    code: 'REG-04',
+    message: 'Не удалось подтвердить регистрацию. Проверь свой статус участия перед повторной попыткой.',
+  },
+  registration_verification_failed: {
+    code: 'REG-04',
+    message: 'Не удалось проверить регистрацию. Обнови приложение и проверь свой статус участия.',
+  },
+  registration_network_failed: {
+    code: 'REG-04',
+    message: 'Не удалось завершить регистрацию из-за сбоя соединения. Проверь свой статус участия перед повторной попыткой.',
+  },
+
+  // Доступность челленджа и отправка результатов.
+  challenge_inactive: {
+    code: 'CHL-01',
+    message: 'Регистрация и отправка результатов сейчас закрыты. Попробуй позже.',
+  },
+  participant_not_registered: {
+    code: 'RES-01',
+    message: 'Сначала зарегистрируйся в челлендже.',
+  },
+  participant_disqualified: {
+    code: 'RES-02',
+    message: 'Отправка новых результатов недоступна. Обратись к организатору.',
+  },
+  invalid_challenge_date: {
+    code: 'RES-03',
+    message: 'Выбрана дата вне периода челленджа. Проверь выбранный день.',
+  },
+  future_challenge_date: {
+    code: 'RES-04',
+    message: 'Этот день ещё не завершился. Отправь результат позже.',
+  },
+  challenge_not_active: {
+    code: 'RES-05',
+    message: 'На выбранную дату отправка результатов недоступна. Проверь дату челленджа.',
+  },
+  invalid_steps: {
+    code: 'RES-06',
+    message: 'Количество шагов должно быть от 1 до 100 000.',
+  },
+  submission_failed: {
+    code: 'RES-07',
+    message: 'Не удалось отправить результат. Проверь подключение и попробуй позже.',
+  },
+  already_submitted: {
+    code: 'RES-08',
+    message: 'Результат за этот день уже отправлен или находится на проверке.',
+  },
+
+  // Файлы и изображения.
+  invalid_image_type: {
+    code: 'FILE-01',
+    message: 'Неподходящий формат изображения. Используй JPG, PNG или WEBP.',
+  },
+  invalid_image_size: {
+    code: 'FILE-02',
+    message: 'Изображение слишком большое. Максимальный размер — 4 МБ.',
+  },
+  invalid_image_data: {
+    code: 'FILE-03',
+    message: 'Не удалось прочитать изображение. Сделай новый скриншот и попробуй снова.',
+  },
+  invalid_base64_length: {
+    code: 'FILE-03',
+    message: 'Не удалось обработать изображение. Сделай новый скриншот и попробуй снова.',
+  },
+  image_base64_decode_failed: {
+    code: 'FILE-03',
+    message: 'Не удалось прочитать изображение. Сделай новый скриншот и попробуй снова.',
+  },
+  image_signature_mismatch: {
+    code: 'FILE-04',
+    message: 'Файл повреждён или имеет неподдерживаемый формат. Сделай новый скриншот.',
+  },
+  screenshot_missing: {
+    code: 'FILE-05',
+    message: 'Сначала выбери скриншот для отправки.',
+  },
+  'Не выбран скриншот': {
+    code: 'FILE-05',
+    message: 'Сначала выбери скриншот для отправки.',
+  },
+  'Не указан ID заявки.': {
+    code: 'MOD-02',
+    message: 'Не удалось определить заявку. Обнови список и попробуй снова.',
+  },
+  'Не выбрано решение модератора.': {
+    code: 'MOD-04',
+    message: 'Не выбрано решение по заявке. Выбери одобрение или отклонение.',
+  },
+  'Поддерживаются только JPG, PNG и WEBP.': {
+    code: 'FILE-01',
+    message: 'Неподходящий формат изображения. Используй JPG, PNG или WEBP.',
+  },
+  'Скриншот слишком большой. Максимальный размер — 4 МБ.': {
+    code: 'FILE-02',
+    message: 'Изображение слишком большое. Максимальный размер — 4 МБ.',
+  },
+
+  // Модерация.
+  moderator_access_denied: {
+    code: 'MOD-01',
+    message: 'У этого аккаунта нет доступа к модерации.',
+  },
+  submission_not_found: {
+    code: 'MOD-02',
+    message: 'Заявка не найдена. Обнови список заявок.',
+  },
+  submission_id_missing: {
+    code: 'MOD-02',
+    message: 'Не удалось определить заявку. Обнови список и попробуй снова.',
+  },
+  submission_already_reviewed: {
+    code: 'MOD-03',
+    message: 'Эта заявка уже проверена. Обнови список заявок.',
+  },
+  invalid_moderation_decision: {
+    code: 'MOD-04',
+    message: 'Не выбрано решение по заявке. Выбери одобрение или отклонение.',
+  },
+  moderation_comment_missing: {
+    code: 'MOD-09',
+    message: 'Для отклонения заявки обязательно укажи причину в комментарии.',
+  },
+  image_not_found: {
+    code: 'MOD-05',
+    message: 'Скриншот заявки не найден. Обнови список и попробуй снова.',
+  },
+  image_too_large: {
+    code: 'MOD-05',
+    message: 'Не удалось открыть скриншот заявки. Сообщи организатору.',
+  },
+  moderation_queue_failed: {
+    code: 'MOD-06',
+    message: 'Не удалось загрузить список заявок. Попробуй обновить его.',
+  },
+  moderation_image_failed: {
+    code: 'MOD-07',
+    message: 'Не удалось загрузить изображение заявки. Попробуй ещё раз.',
+  },
+  moderation_save_failed: {
+    code: 'MOD-08',
+    message: 'Не удалось сохранить решение. Обнови список заявок и проверь статус.',
+  },
+
+  // Тестовые уведомления.
+  vk_service_key_not_configured: {
+    code: 'PUSH-01',
+    message: 'Тестовое уведомление временно недоступно. Сообщи администратору.',
+  },
+  vk_http_error: {
+    code: 'PUSH-01',
+    message: 'Не удалось отправить тестовое уведомление. Сообщи администратору.',
+  },
+  vk_api_error: {
+    code: 'PUSH-01',
+    message: 'Сервис уведомлений отклонил запрос. Сообщи администратору.',
+  },
+  push_failed: {
+    code: 'PUSH-01',
+    message: 'Не удалось отправить тестовое уведомление. Сообщи администратору.',
+  },
+
+  // Общие и временные сбои.
+  database_not_configured: {
+    code: 'SYS-01',
+    message: 'Сервис временно недоступен. Попробуй позже или сообщи организатору.',
+  },
+  sheet_not_found: {
+    code: 'SYS-01',
+    message: 'Сервис временно недоступен. Попробуй позже или сообщи организатору.',
+  },
+  unknown_action: {
+    code: 'SYS-02',
+    message: 'Не удалось обработать запрос. Обнови приложение и попробуй снова.',
+  },
+  network_unavailable: {
+    code: 'SYS-03',
+    message: 'Нет соединения с сервисом челленджа. Проверь интернет и попробуй снова.',
+  },
+  request_timeout: {
+    code: 'SYS-03',
+    message: 'Ответ не получен вовремя. Проверь подключение и попробуй ещё раз.',
+  },
+  invalid_server_response: {
+    code: 'SYS-04',
+    message: 'Получен некорректный ответ. Обнови приложение и попробуй снова.',
+  },
+  system_error: {
+    code: 'SYS-05',
+    message: 'Произошла временная ошибка. Попробуй ещё раз позже.',
+  },
 };
+
+function formatUserError(error, fallbackKey = 'system_error') {
+  const rawValue = error?.code || error?.message || error || '';
+  const rawKey = String(rawValue).trim();
+  let detail = ERROR_DETAILS[rawKey];
+
+  if (!detail && rawKey.startsWith('sheet_not_found:')) {
+    detail = ERROR_DETAILS.sheet_not_found;
+  }
+
+  if (!detail) {
+    const normalized = rawKey.toLowerCase();
+
+    if (
+      normalized.includes('не удалось подключиться') ||
+      normalized.includes('не ответил') ||
+      normalized.includes('failed to fetch') ||
+      normalized.includes('network')
+    ) {
+      detail = ERROR_DETAILS[fallbackKey] || ERROR_DETAILS.network_unavailable;
+    } else if (
+      normalized.includes('timeout') ||
+      normalized.includes('aborterror') ||
+      normalized.includes('время ожидания')
+    ) {
+      detail = ERROR_DETAILS.request_timeout;
+    } else if (
+      normalized.includes('untrusted app') ||
+      normalized.includes('notifications are not allowed') ||
+      normalized.includes('vkwebappallownotifications')
+    ) {
+      detail = ERROR_DETAILS.push_failed;
+    } else if (
+      normalized.includes('не удалось прочитать') ||
+      normalized.includes('не удалось преобразовать') ||
+      normalized.includes('не смог открыть выбранное изображение') ||
+      normalized.includes('не удалось подготовить изображение')
+    ) {
+      detail = ERROR_DETAILS.invalid_image_data;
+    }
+  }
+
+  detail = detail || ERROR_DETAILS[fallbackKey] || ERROR_DETAILS.system_error;
+
+  return `${detail.message} Код: ${detail.code}.`;
+}
 
 /* =====================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -149,7 +437,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   // Загрузка профиля VK.
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // Статус челленджа (F2 в листе «Челленджи»).
+  // Статус челленджа (F2 в «Челленджи»).
   const [challengeActive, setChallengeActive] = useState(null);
   const [challengeStatusLoading, setChallengeStatusLoading] = useState(true);
   const [challengeStatusError, setChallengeStatusError] = useState('');
@@ -258,7 +546,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const isDisqualified = isRegistered && participantStatus === 'disqualified';
 
   /* =====================================
-     СТАТУС ЧЕЛЛЕНДЖА (F2 в «Челленджи»)
+     СТАТУС ЧЕЛЛЕНДЖА
   ===================================== */
   useEffect(() => {
     let active = true;
@@ -381,7 +669,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             setRegisteredParticipant(null);
           }
         } else {
-          setRegistrationMessage('Не удалось проверить регистрацию.');
+          setRegistrationMessage(formatUserError('registration_verification_failed'));
           setRegistrationMessageType('error');
         }
         setRegistrationChecked(true);
@@ -389,7 +677,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       .catch(error => {
         if (!active) return;
         console.warn('Ошибка проверки регистрации:', error);
-        setRegistrationMessage('Не удалось проверить регистрацию. Попробуй зарегистрироваться.');
+        setRegistrationMessage(formatUserError('registration_verification_failed'));
         setRegistrationMessageType('error');
         setRegistrationChecked(true);
       });
@@ -543,8 +831,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         if (active) {
           console.error('Ошибка загрузки модерации:', error);
           setModerationError(
-            ERROR_MESSAGES[error.message] || error.message ||
-            'Не удалось загрузить очередь модерации.'
+            formatUserError(error, 'moderation_queue_failed')
           );
         }
       })
@@ -557,13 +844,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ===================================== */
   const openRegistrationForm = () => {
     if (challengeActive === false) {
-      setRegistrationMessage('Челлендж сейчас неактивен. Активностей нет.');
+      setRegistrationMessage(formatUserError('challenge_inactive'));
       setRegistrationMessageType('error');
       return;
     }
 
     if (!hasSignedLaunchParams) {
-      setRegistrationMessage('Для регистрации открой STEP CHALLENGE непосредственно через VK.');
+      setRegistrationMessage(formatUserError('vk_signature_missing'));
       setRegistrationMessageType('error');
       return;
     }
@@ -592,13 +879,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     event?.preventDefault();
 
     if (challengeActive === false) {
-      setRegistrationMessage('Челлендж сейчас неактивен. Активностей нет.');
+      setRegistrationMessage(formatUserError('challenge_inactive'));
       setRegistrationMessageType('error');
       return;
     }
 
     if (!hasSignedLaunchParams) {
-      setRegistrationMessage('Для регистрации открой STEP CHALLENGE непосредственно через VK.');
+      setRegistrationMessage(formatUserError('vk_signature_missing'));
       setRegistrationMessageType('error');
       return;
     }
@@ -612,23 +899,28 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       ? 'Сотрудник'
       : cleanGroup;
 
-    if (!cleanFirstName || !cleanLastName) {
-      setRegistrationMessage('Заполни имя и фамилию.');
+    if (!cleanFirstName) {
+      setRegistrationMessage(formatUserError('invalid_first_name'));
+      setRegistrationMessageType('error');
+      return;
+    }
+    if (!cleanLastName) {
+      setRegistrationMessage(formatUserError('invalid_last_name'));
       setRegistrationMessageType('error');
       return;
     }
     if (cleanFirstName.length > 40 || cleanLastName.length > 40) {
-      setRegistrationMessage('Имя и фамилия не должны быть длиннее 40 символов.');
+      setRegistrationMessage(formatUserError('invalid_name_length'));
       setRegistrationMessageType('error');
       return;
     }
     if (!registrationIsEmployee && !cleanGroup) {
-      setRegistrationMessage('Укажи номер группы или отметь чекбокс «Сотрудник».');
+      setRegistrationMessage(formatUserError('invalid_group'));
       setRegistrationMessageType('error');
       return;
     }
     if (!registrationIsEmployee && !/^\d{1,6}$/.test(cleanGroup)) {
-      setRegistrationMessage('В поле «Группа» укажи только цифры (до 6 знаков).');
+      setRegistrationMessage(formatUserError('invalid_group'));
       setRegistrationMessageType('error');
       return;
     }
@@ -653,7 +945,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
       if (!result?.ok) {
         throw new Error(
-          ERROR_MESSAGES[result?.error] || result?.error || 'Ошибка регистрации.'
+          result?.error || 'registration_failed'
         );
       }
 
@@ -677,8 +969,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     } catch (error) {
       console.error('Ошибка регистрации:', error);
       setRegistrationMessage(
-        ERROR_MESSAGES[error.message] || error.message ||
-        'Не удалось зарегистрироваться. Попробуй ещё раз.'
+        formatUserError(error, 'registration_failed')
       );
       setRegistrationMessageType('error');
     } finally {
@@ -701,14 +992,14 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     if (!file) return;
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setSubmissionMessage('Поддерживаются форматы JPG, PNG и WEBP.');
+      setSubmissionMessage(formatUserError('invalid_image_type'));
       setSubmissionMessageType('error');
       event.target.value = '';
       return;
     }
 
     if (file.size > MAX_SCREENSHOT_SIZE) {
-      setSubmissionMessage('Скриншот слишком большой. Максимальный размер — 4 МБ.');
+      setSubmissionMessage(formatUserError('invalid_image_size'));
       setSubmissionMessageType('error');
       event.target.value = '';
       return;
@@ -727,35 +1018,35 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   ===================================== */
   const handleSubmitResult = async () => {
     if (challengeActive === false) {
-      setSubmissionMessage('Челлендж сейчас неактивен. Отправка невозможна.');
+      setSubmissionMessage(formatUserError('challenge_inactive'));
       setSubmissionMessageType('error');
       return;
     }
 
     if (!hasSignedLaunchParams) {
-      setSubmissionMessage('Открой STEP CHALLENGE непосредственно через VK.');
+      setSubmissionMessage(formatUserError('vk_signature_missing'));
       setSubmissionMessageType('error');
       return;
     }
     if (!isRegistered) {
-      setSubmissionMessage('Сначала зарегистрируйся в челлендже.');
+      setSubmissionMessage(formatUserError('participant_not_registered'));
       setSubmissionMessageType('error');
       return;
     }
     if (isDisqualified) {
-      setSubmissionMessage('Ты дисквалифицирован. Отправка новых результатов недоступна.');
+      setSubmissionMessage(formatUserError('participant_disqualified'));
       setSubmissionMessageType('error');
       return;
     }
 
     const steps = Number(stepsValue);
     if (!Number.isInteger(steps) || steps < 1 || steps > 100000) {
-      setSubmissionMessage('Укажи количество шагов от 1 до 100 000.');
+      setSubmissionMessage(formatUserError('invalid_steps'));
       setSubmissionMessageType('error');
       return;
     }
     if (!screenshotFile) {
-      setSubmissionMessage('Сначала выбери скриншот Google Fit.');
+      setSubmissionMessage(formatUserError('screenshot_missing'));
       setSubmissionMessageType('error');
       return;
     }
@@ -763,11 +1054,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       lastSubmission &&
       ['На проверке', 'Одобрено'].includes(lastSubmission.status)
     ) {
-      setSubmissionMessage(
-        lastSubmission.status === 'На проверке'
-          ? 'За этот день результат уже находится на проверке.'
-          : 'За этот день результат уже одобрен.'
-      );
+      setSubmissionMessage(formatUserError('already_submitted'));
       setSubmissionMessageType('error');
       return;
     }
@@ -814,8 +1101,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     } catch (error) {
       console.error('Ошибка отправки результата:', error);
       setSubmissionMessage(
-        ERROR_MESSAGES[error.message] || error.message ||
-        'Не удалось отправить результат. Попробуй ещё раз.'
+        formatUserError(error, 'submission_failed')
       );
       setSubmissionMessageType('error');
     } finally {
@@ -839,8 +1125,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     } catch (error) {
       console.error('Ошибка загрузки скриншота:', error);
       setModerationError(
-        ERROR_MESSAGES[error.message] || error.message ||
-        'Не удалось открыть изображение.'
+        formatUserError(error, 'moderation_image_failed')
       );
     } finally {
       setModerationImageLoading(previous => ({ ...previous, [submissionId]: false }));
@@ -855,14 +1140,14 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     if (!isModerator) return;
 
     if (challengeActive === false) {
-      setModerationError('Челлендж сейчас неактивен. Модерация недоступна.');
+      setModerationError(formatUserError('challenge_inactive'));
       return;
     }
 
     const comment = String(moderationComments[submission.id] || '').trim();
 
     if (decision === 'Отклонено' && !comment) {
-      setModerationMessage('Напиши комментарий с причиной отклонения.');
+      setModerationMessage(formatUserError('moderation_comment_missing'));
       return;
     }
 
@@ -902,8 +1187,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     } catch (error) {
       console.error('Ошибка модерации:', error);
       setModerationError(
-        ERROR_MESSAGES[error.message] || error.message ||
-        'Не удалось сохранить решение.'
+        formatUserError(error, 'moderation_save_failed')
       );
     } finally {
       setModerationBusyId('');
@@ -917,15 +1201,13 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     if (!isModerator || testNotificationBusy) return;
 
     if (!hasSignedLaunchParams) {
-      setTestNotificationMessage(
-        'Не найдены подписанные параметры запуска VK. Закрой и заново открой приложение непосредственно через VK.'
-      );
+      setTestNotificationMessage(formatUserError('vk_signature_missing'));
       setTestNotificationMessageType('error');
       return;
     }
 
     setTestNotificationBusy(true);
-    setTestNotificationMessage('Отправляем тестовое уведомление через VK...');
+    setTestNotificationMessage('Отправляем тестовое уведомление...');
     setTestNotificationMessageType('info');
 
     try {
@@ -943,9 +1225,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       setTestNotificationMessageType('success');
     } catch (error) {
       console.error('Ошибка отправки тестового push-уведомления:', error);
-      setTestNotificationMessage(
-        error.message || 'Не удалось отправить тестовое push-уведомление.'
-      );
+      setTestNotificationMessage(formatUserError(error, 'push_failed'));
       setTestNotificationMessageType('error');
     } finally {
       setTestNotificationBusy(false);
@@ -1353,7 +1633,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </>
   );
 
-  /* =====================================
+    /* =====================================
      СТРАНИЦА ОТПРАВКИ РЕЗУЛЬТАТА
   ===================================== */
   const renderSubmit = () => {
@@ -1900,7 +2180,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     </section>
   );
 
-  /* =====================================
+    /* =====================================
      РЕЙТИНГ
   ===================================== */
   const renderRating = () => {
@@ -2575,14 +2855,23 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             Заходи позже.
           </p>
 
-          {challengeStatusError && (
+          {challengeStatusError ? (
+            <p style={{
+              marginTop: '14px',
+              fontSize: '11px',
+              opacity: 0.7,
+              color: 'var(--vkui--color_text_secondary, #818794)',
+            }}>
+              {formatUserError(challengeStatusError, 'network_unavailable')}
+            </p>
+          ) : (
             <p style={{
               marginTop: '14px',
               fontSize: '11px',
               opacity: 0.5,
               color: 'var(--vkui--color_text_secondary, #818794)',
             }}>
-              ({challengeStatusError})
+              Код: CHL-01.
             </p>
           )}
         </div>

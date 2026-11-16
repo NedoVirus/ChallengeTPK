@@ -74,7 +74,7 @@ export function getGasJsonp(
 
       reject(
         new Error(
-          'Не удалось подключиться к серверу.'
+          'network_unavailable'
         )
       );
     };
@@ -84,7 +84,7 @@ export function getGasJsonp(
 
       reject(
         new Error(
-          'Сервер не ответил за 15 секунд. Проверь подключение и журнал выполнений.'
+          'request_timeout'
         )
       );
     }, timeoutMs);
@@ -187,7 +187,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
         finish(
           reject,
           new Error(
-            'Сервер вернул некорректный ответ.'
+            'invalid_server_response'
           )
         );
 
@@ -206,7 +206,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
       finish(
         reject,
         new Error(
-          'Сервер не ответил на POST-запрос. Проверь версию веб-развёртывания.'
+          'request_timeout'
         )
       );
     }, timeoutMs);
@@ -220,10 +220,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
     } catch (error) {
       finish(
         reject,
-        new Error(
-          'Не удалось отправить POST-запрос: ' +
-          error.message
-        )
+        new Error('network_unavailable')
       );
     }
   });
@@ -235,7 +232,7 @@ function sendGasForm(payload, timeoutMs = 30000) {
 ===================================== */
 
 /**
- * Подтверждение регистрации через фактическую запись в Google Таблице.
+ * Подтверждение регистрации через проверку сохранённых данных.
  * Ответ POST-iframe больше не является обязательным условием успеха.
  */
 async function registerParticipantWithVerification(payload, userId) {
@@ -270,7 +267,7 @@ async function registerParticipantWithVerification(payload, userId) {
     });
 
   } catch (error) {
-    // Даже при сетевой ошибке POST мог успеть дойти до Apps Script.
+    // Даже при сетевой ошибке POST мог успеть дойти до сервера.
     // Поэтому сначала всё равно проверяем таблицу через GET participant.
     postError = error;
     console.warn(
@@ -284,7 +281,7 @@ async function registerParticipantWithVerification(payload, userId) {
 
   let lastCheckError = null;
 
-  // Apps Script может записать строку чуть позже завершения POST.
+  // Сервер может сохранить запись чуть позже завершения POST.
   // Несколько проверок позволяют дождаться появления участника.
   for (let attempt = 1; attempt <= 8; attempt++) {
     try {
@@ -356,26 +353,18 @@ async function registerParticipantWithVerification(payload, userId) {
   }
 
   if (lastCheckError) {
-    throw new Error(
-      'Запрос регистрации был отправлен, но не удалось проверить запись в Базе Данных: ' +
-      lastCheckError.message
-    );
+    throw new Error('registration_verification_failed');
   }
 
   if (postError) {
-    const detail = postError.name === 'AbortError'
-      ? 'Время отправки запроса истекло.'
-      : 'Не удалось подтвердить отправку запроса.';
-
     throw new Error(
-      detail +
-      ' Участник не появился в Базе Данных. Проверь интернет-соединение и журнал выполнений на сервере.'
+      postError.name === 'AbortError'
+        ? 'request_timeout'
+        : 'registration_network_failed'
     );
   }
 
-  throw new Error(
-    'Сервер получил запрос, но участник не появился в Базе Данных. Проверь журнал выполнений на сервере.'
-  );
+  throw new Error('registration_not_confirmed');
 }
 
 
@@ -478,58 +467,7 @@ export async function submitStepsResult(payload) {
   );
 
   if (!result?.ok) {
-    const messages = {
-      challenge_inactive:
-        'Челлендж сейчас неактивен. Активностей нет.',
-
-      image_base64_decode_failed:
-        'Ошибка декодирования изображения. Попробуй сохранить скриншот заново.',
-
-      image_signature_mismatch:
-        'Формат изображения не совпадает с содержимым файла. Попробуй сделать новый скриншот.',
-
-      invalid_image_data:
-        'Не удалось прочитать изображение.',
-
-      server_not_configured:
-        'Не настроены параметры VK на сервере.',
-
-      vk_signature_missing:
-        'Не найдена подпись VK. Перезапусти приложение через VK.',
-
-      invalid_vk_signature:
-        'VK не подтвердил подлинность запуска.',
-
-      participant_not_registered:
-        'Сначала зарегистрируйся в челлендже.',
-
-      invalid_challenge_date:
-        'Неверная дата результата.',
-
-      future_challenge_date:
-        'Нельзя отправить результат за будущий день.',
-
-      challenge_not_active:
-        'Челлендж не активен на выбранную дату.',
-
-      invalid_steps:
-        'Некорректное количество шагов.',
-
-      invalid_image_type:
-        'Поддерживаются только JPG, PNG и WEBP.',
-
-      invalid_image_size:
-        'Размер изображения превышает допустимый.',
-
-      database_not_configured:
-        'Не настроена База Данных.',
-    };
-
-    throw new Error(
-      messages[result?.error] ||
-      result?.error ||
-      'Не удалось отправить результат.'
-    );
+    throw new Error(result?.error || 'submission_failed');
   }
 
   if (result.status === 'already_submitted') {
@@ -571,25 +509,7 @@ export async function getModerationQueue(
   );
 
   if (!result?.ok) {
-    const messages = {
-      challenge_inactive:
-        'Челлендж сейчас неактивен. Модерация недоступна.',
-
-      moderator_access_denied:
-        'У этого аккаунта нет доступа к модерации.',
-
-      invalid_vk_signature:
-        'Не удалось подтвердить аккаунт VK.',
-
-      server_not_configured:
-        'Не настроены параметры VK на сервере.',
-    };
-
-    throw new Error(
-      messages[result?.error] ||
-      result?.error ||
-      'Не удалось загрузить очередь модерации.'
-    );
+    throw new Error(result?.error || 'moderation_queue_failed');
   }
 
   return result.submissions || [];
@@ -655,31 +575,7 @@ export async function moderateSubmission(payload) {
   );
 
   if (!result?.ok) {
-    const messages = {
-      challenge_inactive:
-        'Челлендж сейчас неактивен. Модерация недоступна.',
-
-      moderator_access_denied:
-        'У этого аккаунта нет доступа к модерации.',
-
-      submission_not_found:
-        'Заявка не найдена.',
-
-      submission_already_reviewed:
-        'Эта заявка уже была проверена.',
-
-      invalid_moderation_decision:
-        'Некорректное решение модератора.',
-
-      invalid_vk_signature:
-        'VK не подтвердил подлинность аккаунта.',
-    };
-
-    throw new Error(
-      messages[result?.error] ||
-      result?.error ||
-      'Не удалось сохранить решение модератора.'
-    );
+    throw new Error(result?.error || 'moderation_save_failed');
   }
 
   return result;
@@ -737,48 +633,19 @@ export async function sendTestNotification(
   );
 
   if (!result?.ok) {
-    const messages = {
-      moderator_access_denied:
-        'Тестовое уведомление может отправить только модератор.',
+    const pushError = new Error(
+      result?.error || 'push_failed'
+    );
 
-      invalid_vk_signature:
-        'VK не подтвердил подлинность запуска. Перезапусти приложение через VK.',
-
-      server_not_configured:
-        'Не настроены параметры проверки подписи VK на сервере.',
-
-      vk_service_key_not_configured:
-        'В настройках сервера не найден сервисный ключ VK. Проверь Script Properties: VK_SERVICE_KEY.',
-
-      vk_http_error:
-        'VK вернул HTTP-ошибку при отправке уведомления.',
+    // Подробности остаются в объекте ошибки для консоли,
+    // но не показываются участникам в интерфейсе.
+    pushError.details = {
+      vkErrorCode: result?.vkErrorCode || null,
+      vkMessage: result?.vkMessage || null,
+      httpStatus: result?.httpStatus || null,
     };
 
-    if (result?.error === 'vk_api_error') {
-      const code = result.vkErrorCode
-        ? ` Код ошибки: ${result.vkErrorCode}.`
-        : '';
-      const details = result.vkMessage
-        ? ` ${result.vkMessage}`
-        : '';
-
-      throw new Error(
-        `VK API отклонил отправку уведомления.${code}${details}`
-      );
-    }
-
-    if (result?.error === 'vk_http_error' && result?.vkMessage) {
-      throw new Error(
-        `${messages.vk_http_error} ${result.vkMessage}`
-      );
-    }
-
-    throw new Error(
-      messages[result?.error] ||
-      result?.vkMessage ||
-      result?.error ||
-      'Не удалось отправить тестовое push-уведомление.'
-    );
+    throw pushError;
   }
 
   return result;
