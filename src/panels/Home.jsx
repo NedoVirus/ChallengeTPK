@@ -28,6 +28,26 @@ const CHALLENGE_DAYS = [
 
 const MAX_SCREENSHOT_SIZE = 4 * 1024 * 1024;
 
+const GOOGLE_FIT_ANDROID_URL =
+  'https://play.google.com/store/apps/details?id=com.google.android.apps.fitness';
+
+const GOOGLE_FIT_IOS_URL =
+  'https://apps.apple.com/app/google-fit-activity-tracker/id1433864494';
+
+const ANDROID_VK_PLATFORMS = new Set([
+  'mobile_android',
+  'mobile_android_messenger',
+  'android_external',
+]);
+
+const IOS_VK_PLATFORMS = new Set([
+  'mobile_iphone',
+  'mobile_iphone_messenger',
+  'mobile_ipad',
+  'iphone_external',
+  'ipad_external',
+]);
+
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const ERROR_MESSAGES = {
@@ -209,6 +229,33 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   const isModerator = userId === MODERATOR_VK_ID;
 
+  // Определяем мобильную платформу по подписанным параметрам запуска VK.
+  const vkPlatform = String(launchParams?.vk_platform || '').toLowerCase();
+  const googleFitStoreUrl = ANDROID_VK_PLATFORMS.has(vkPlatform)
+    ? GOOGLE_FIT_ANDROID_URL
+    : IOS_VK_PLATFORMS.has(vkPlatform)
+      ? GOOGLE_FIT_IOS_URL
+      : '';
+  const googleFitStoreName = ANDROID_VK_PLATFORMS.has(vkPlatform)
+    ? 'Google Play'
+    : IOS_VK_PLATFORMS.has(vkPlatform)
+      ? 'App Store'
+      : '';
+
+  const handleOpenGoogleFit = async () => {
+    if (!googleFitStoreUrl) return;
+
+    try {
+      await bridge.send('VKWebAppOpenLink', {
+        url: googleFitStoreUrl,
+      });
+    } catch (error) {
+      console.warn('Не удалось открыть Google Fit через VK Bridge:', error);
+      // Резервный переход на страницу приложения в магазине.
+      window.location.assign(googleFitStoreUrl);
+    }
+  };
+
   const signedLaunchParams = Object.fromEntries(
     Object.entries(launchParams || {}).filter(
       ([key, value]) =>
@@ -260,7 +307,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ОСВОБОЖДЕНИЕ ПРЕДПРОСМОТРА ФАЙЛА
-  ===================================== */
+===================================== */
   useEffect(() => {
     return () => {
       if (screenshotPreview) URL.revokeObjectURL(screenshotPreview);
@@ -269,7 +316,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ЗАГРУЗКА КОЛИЧЕСТВА УЧАСТНИКОВ
-  ===================================== */
+===================================== */
   useEffect(() => {
     if (challengeActive === false) return;
     let active = true;
@@ -285,7 +332,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ПРЕДЗАПОЛНЕНИЕ ФОРМЫ ДАННЫМИ VK
-  ===================================== */
+===================================== */
   useEffect(() => {
     setRegistrationFirstName(
       current => current || sanitizeRussianName(first_name || '')
@@ -297,7 +344,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      БЛОКИРОВКА СКРОЛЛА ФОНА, КОГДА ОТКРЫТА МОДАЛКА
-  ===================================== */
+===================================== */
   useEffect(() => {
     if (!registrationFormOpen) return;
     const previous = document.body.style.overflow;
@@ -309,7 +356,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ПРОВЕРКА РЕГИСТРАЦИИ
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
 
@@ -366,7 +413,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ОБНОВЛЕНИЕ СТАТУСА УЧАСТНИКА
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
 
@@ -394,7 +441,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СТАТУС РЕЗУЛЬТАТА
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
 
@@ -426,7 +473,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СТАТУСЫ ПЯТИ ДНЕЙ НА ГЛАВНОЙ
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
 
@@ -474,7 +521,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ЗАГРУЗКА РЕЙТИНГА
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
     if (activeTab !== 'rating' || challengeActive === false) {
@@ -490,7 +537,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ЗАГРУЗКА ОЧЕРЕДИ МОДЕРАЦИИ
-  ===================================== */
+===================================== */
   useEffect(() => {
     let active = true;
     if (
@@ -521,7 +568,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      РЕГИСТРАЦИЯ
-  ===================================== */
+===================================== */
   const openRegistrationForm = () => {
     if (challengeActive === false) {
       setRegistrationMessage('Челлендж сейчас неактивен. Активностей нет.');
@@ -655,7 +702,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СКРИНШОТ
-  ===================================== */
+===================================== */
   const removeScreenshot = () => {
     if (screenshotPreview) URL.revokeObjectURL(screenshotPreview);
     setScreenshotFile(null);
@@ -691,7 +738,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ОТПРАВКА РЕЗУЛЬТАТА
-  ===================================== */
+===================================== */
   const handleSubmitResult = async () => {
     if (challengeActive === false) {
       setSubmissionMessage('Челлендж сейчас неактивен. Отправка невозможна.');
@@ -792,7 +839,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      МОДЕРАЦИЯ
-  ===================================== */
+===================================== */
   const handleLoadModerationImage = async submissionId => {
     if (moderationImages[submissionId]) return;
 
@@ -879,7 +926,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ТЕСТОВОЕ PUSH-УВЕДОМЛЕНИЕ
-  ===================================== */
+===================================== */
   const handleSendTestNotification = async () => {
     if (!isModerator || testNotificationBusy) return;
 
@@ -921,7 +968,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ГЛАВНАЯ СТРАНИЦА
-  ===================================== */
+===================================== */
   const renderHome = () => (
     <>
       <section className="step-hero">
@@ -1386,6 +1433,47 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           </span>
         </div>
 
+        {googleFitStoreUrl && (
+          <button
+            type="button"
+            onClick={handleOpenGoogleFit}
+            disabled={submissionBusy}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '9px',
+              width: '100%',
+              marginTop: '14px',
+              padding: '13px 14px',
+              border: '1px solid #d8e4ee',
+              borderRadius: '12px',
+              background: '#ffffff',
+              color: '#2468a6',
+              fontSize: '14px',
+              fontWeight: 700,
+              cursor: submissionBusy ? 'default' : 'pointer',
+              boxSizing: 'border-box',
+            }}
+          >
+            <span aria-hidden="true" style={{ fontSize: '18px' }}>↗</span>
+            Открыть / скачать Google Fit
+          </button>
+        )}
+
+        {googleFitStoreUrl && (
+          <p style={{
+            margin: '6px 0 0',
+            color: 'var(--vkui--color_text_secondary, #777)',
+            fontSize: '11px',
+            lineHeight: 1.4,
+            textAlign: 'center',
+          }}>
+            Откроется {googleFitStoreName}. Если Google Fit уже установлен,
+            на странице приложения будет доступна кнопка «Открыть».
+          </p>
+        )}
+
         <label style={{ display: 'block', fontWeight: 600, margin: '18px 0 7px' }}>
           День челленджа
         </label>
@@ -1572,7 +1660,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      СТРАНИЦА МОДЕРАЦИИ
-  ===================================== */
+===================================== */
   const renderModeration = () => (
     <section className="step-inner-page" style={{ paddingBottom: '30px' }}>
       <button
@@ -1825,7 +1913,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      РЕЙТИНГ
-  ===================================== */
+===================================== */
   const renderRating = () => {
     const currentUserRating = ratingRows.find(
       item => String(item.vkUserId) === String(userId)
@@ -1960,7 +2048,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ПРОФИЛЬ
-  ===================================== */
+===================================== */
   const renderProfile = () => (
     <section className="step-inner-page">
       <span className="step-overline">ЛИЧНЫЙ КАБИНЕТ</span>
@@ -2100,7 +2188,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      МОДАЛКА РЕГИСТРАЦИИ
-  ===================================== */
+===================================== */
   const renderRegistrationModal = () => {
     if (!registrationFormOpen || isRegistered) return null;
 
@@ -2406,7 +2494,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ЗАГРУЗКА СТАТУСА ЧЕЛЛЕНДЖА
-  ===================================== */
+===================================== */
   if (challengeStatusLoading) {
     return (
       <Panel id={id} className="step-panel">
@@ -2446,7 +2534,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   /* =====================================
      ЧЕЛЛЕНДЖ НЕАКТИВЕН — ЗАГЛУШКА (для участников)
      Модератору оставляем доступ к профилю и тесту push.
-  ===================================== */
+===================================== */
   if (challengeActive === false && !(isModerator && hasSignedLaunchParams)) {
     return (
       <Panel id={id} className="step-panel">
@@ -2515,7 +2603,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ЭКРАН ЗАГРУЗКИ ПРОФИЛЯ VK
-  ===================================== */
+===================================== */
   if (profileLoading || !registrationChecked) {
     return (
       <Panel id={id} className="step-panel">
@@ -2568,7 +2656,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
 
   /* =====================================
      ОСНОВНОЙ ИНТЕРФЕЙС
-  ===================================== */
+===================================== */
   return (
     <Panel id={id} className="step-panel">
       <PanelHeader>Челлендж | ТПК</PanelHeader>
