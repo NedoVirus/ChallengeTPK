@@ -400,6 +400,20 @@ export function postGasForm(payload) {
     );
   }
 
+  // Нормализуем признак сотрудника перед отправкой на сервер.
+  // Старые версии Home.jsx без is_employee по умолчанию считаются студентами.
+  const isEmployee =
+    payload?.is_employee === true ||
+    String(payload?.is_employee || '').trim().toLowerCase() === 'true';
+
+  const registrationPayload = {
+    ...payload,
+    is_employee: isEmployee ? 'true' : 'false',
+    group: isEmployee
+      ? 'Сотрудник'
+      : String(payload?.group || '').trim(),
+  };
+
   // Повторный вызов для того же VK ID использует уже выполняющийся запрос.
   const existingRequest = registrationRequests.get(userId);
 
@@ -408,7 +422,7 @@ export function postGasForm(payload) {
   }
 
   const request = registerParticipantWithVerification(
-    payload,
+    registrationPayload,
     userId
   ).finally(() => {
     registrationRequests.delete(userId);

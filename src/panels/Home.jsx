@@ -147,6 +147,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [registrationFirstName, setRegistrationFirstName] = useState('');
   const [registrationLastName, setRegistrationLastName] = useState('');
   const [registrationGroup, setRegistrationGroup] = useState('');
+  const [registrationIsEmployee, setRegistrationIsEmployee] = useState(false);
   const [registeredParticipant, setRegisteredParticipant] = useState(null);
 
   // Отправка результатов.
@@ -337,7 +338,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             setRegistrationLastName(
               sanitizeRussianName(data.participant.lastName || last_name || '')
             );
-            setRegistrationGroup(data.participant.group || '');
+            const participantGroup = String(data.participant.group || '').trim();
+            setRegistrationGroup(participantGroup);
+            setRegistrationIsEmployee(
+              participantGroup.toLowerCase() === 'сотрудник'
+            );
             setRegistrationFormOpen(false);
           } else {
             setRegisteredParticipant(null);
@@ -570,9 +575,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
     const cleanFirstName = registrationFirstName.trim().replace(/\s+/g, ' ');
     const cleanLastName = registrationLastName.trim().replace(/\s+/g, ' ');
     const cleanGroup = registrationGroup.trim();
+    const participantGroup = registrationIsEmployee
+      ? 'Сотрудник'
+      : cleanGroup;
 
-    if (!cleanFirstName || !cleanLastName || !cleanGroup) {
-      setRegistrationMessage('Заполни имя, фамилию и номер группы.');
+    if (!cleanFirstName || !cleanLastName) {
+      setRegistrationMessage('Заполни имя и фамилию.');
       setRegistrationMessageType('error');
       return;
     }
@@ -581,7 +589,12 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       setRegistrationMessageType('error');
       return;
     }
-    if (!/^\d{1,6}$/.test(cleanGroup)) {
+    if (!registrationIsEmployee && !cleanGroup) {
+      setRegistrationMessage('Укажи номер группы или отметь чекбокс «Сотрудник».');
+      setRegistrationMessageType('error');
+      return;
+    }
+    if (!registrationIsEmployee && !/^\d{1,6}$/.test(cleanGroup)) {
       setRegistrationMessage('В поле «Группа» укажи только цифры (до 6 знаков).');
       setRegistrationMessageType('error');
       return;
@@ -597,7 +610,8 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         ...signedLaunchParams,
         first_name: cleanFirstName,
         last_name: cleanLastName,
-        group: cleanGroup,
+        group: participantGroup,
+        is_employee: registrationIsEmployee ? 'true' : 'false',
         photo_200: photo_200 || '',
         city: city?.title || '',
       };
@@ -613,14 +627,15 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       const participant = result.participant || {
         firstName: cleanFirstName,
         lastName: cleanLastName,
-        group: cleanGroup,
+        group: participantGroup,
         status: 'active',
       };
 
       setRegisteredParticipant(participant);
       setRegistrationFirstName(cleanFirstName);
       setRegistrationLastName(cleanLastName);
-      setRegistrationGroup(cleanGroup);
+      setRegistrationGroup(participantGroup);
+      setRegistrationIsEmployee(registrationIsEmployee);
       setIsRegistered(true);
       setRegistrationFormOpen(false);
       setParticipantsCount(Number(result.registeredCount) || participantsCount);
@@ -1927,7 +1942,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                       <span>{formatNumber(item.steps)} шагов</span>
                     </div>
                     <span className="step-day-status">
-                      {item.group ? `${item.group} группа` : 'Группа не указана'}
+                      {String(item.group || '').trim().toLowerCase() === 'сотрудник'
+                         ? 'Сотрудник'
+                         : item.group
+                           ? `${item.group} группа`
+                           : 'Группа не указана'}
                     </span>
                   </div>
                 ))}
@@ -1954,7 +1973,11 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
         <h2>{fullName}</h2>
         {city?.title && <p>{city.title}</p>}
         {(registeredParticipant?.group || registrationGroup) && (
-          <p>Группа {registeredParticipant?.group || registrationGroup}</p>
+          <p>
+            {String(registeredParticipant?.group || registrationGroup).trim().toLowerCase() === 'сотрудник'
+              ? 'Сотрудник'
+              : `Группа ${registeredParticipant?.group || registrationGroup}`}
+          </p>
         )}
         <span
           className="step-profile-status"
@@ -2195,7 +2218,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             не совпадает с твоими настоящими данными, то участие невозможно
             и не получится узнать победителя. Имя и фамилия указываются
             исключительно на русском языке (кириллицей).
-            Номер группы вводится только цифрами.
+            Номер группы вводят только студенты. Сотрудникам нужно отметить чекбокс «Сотрудник».
           </p>
 
           <form onSubmit={handleRegister}>
@@ -2253,41 +2276,95 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
               />
             </label>
 
-            <label style={{
-              display: 'block', marginBottom: '14px',
-              fontSize: '11px', fontWeight: 700, color: '#52616b',
+            <div style={{
+              marginBottom: registrationIsEmployee ? '14px' : '11px',
+              padding: '11px 12px',
+              border: '1px solid #dce4e9',
+              borderRadius: '10px',
+              background: registrationIsEmployee ? '#f1f8e9' : '#f8fafb',
             }}>
-              Группа
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{1,6}"
-                value={registrationGroup}
-                onChange={event =>
-                  setRegistrationGroup(
-                    event.target.value.replace(/\D/g, '').slice(0, 6)
-                  )
-                }
-                placeholder="Например, 29"
-                maxLength={6}
-                required
-                disabled={registrationBusy}
+              <label
+                htmlFor="step-registration-employee"
                 style={{
-                  display: 'block', width: '100%', height: '43px',
-                  marginTop: '6px', padding: '0 12px',
-                  border: '1px solid #dce4e9', borderRadius: '10px',
-                  background: '#f8fafb', color: '#18232d',
-                  font: 'inherit', fontSize: '13px',
-                  outlineColor: '#8bbd4b', boxSizing: 'border-box',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '9px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#34452b',
+                  cursor: registrationBusy ? 'default' : 'pointer',
                 }}
-              />
+              >
+                <input
+                  id="step-registration-employee"
+                  type="checkbox"
+                  checked={registrationIsEmployee}
+                  onChange={event => {
+                    const checked = event.target.checked;
+                    setRegistrationIsEmployee(checked);
+                    if (checked) setRegistrationGroup('');
+                    setRegistrationMessage('');
+                    setRegistrationMessageType('');
+                  }}
+                  disabled={registrationBusy}
+                  style={{
+                    width: '17px',
+                    height: '17px',
+                    margin: 0,
+                    accentColor: '#78a83c',
+                  }}
+                />
+                Сотрудник
+              </label>
               <span style={{
-                display: 'block', marginTop: '4px',
-                fontSize: '10px', fontWeight: 400, color: '#89959d',
+                display: 'block',
+                marginTop: '5px',
+                marginLeft: '26px',
+                fontSize: '10px',
+                fontWeight: 400,
+                color: '#89959d',
               }}>
-                Укажи номер группы цифрами.
+                Отметь, если ты сотрудник колледжа.
               </span>
-            </label>
+            </div>
+
+            {!registrationIsEmployee && (
+              <label style={{
+                display: 'block', marginBottom: '14px',
+                fontSize: '11px', fontWeight: 700, color: '#52616b',
+              }}>
+                Группа
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{1,6}"
+                  value={registrationGroup}
+                  onChange={event =>
+                    setRegistrationGroup(
+                      event.target.value.replace(/\D/g, '').slice(0, 6)
+                    )
+                  }
+                  placeholder="Например, 29"
+                  maxLength={6}
+                  required={!registrationIsEmployee}
+                  disabled={registrationBusy}
+                  style={{
+                    display: 'block', width: '100%', height: '43px',
+                    marginTop: '6px', padding: '0 12px',
+                    border: '1px solid #dce4e9', borderRadius: '10px',
+                    background: '#f8fafb', color: '#18232d',
+                    font: 'inherit', fontSize: '13px',
+                    outlineColor: '#8bbd4b', boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{
+                  display: 'block', marginTop: '4px',
+                  fontSize: '10px', fontWeight: 400, color: '#89959d',
+                }}>
+                  Укажи номер группы цифрами.
+                </span>
+              </label>
+            )}
 
             <button
               type="submit"
