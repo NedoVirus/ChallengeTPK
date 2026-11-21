@@ -484,6 +484,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [moderationMessage, setModerationMessage] = useState('');
   const [moderationImages, setModerationImages] = useState({});
   const [moderationImageLoading, setModerationImageLoading] = useState({});
+  const [moderationImageErrors, setModerationImageErrors] = useState({});
   const [moderationComments, setModerationComments] = useState({});
   const [moderationBusyId, setModerationBusyId] = useState('');
   const [moderationReloadKey, setModerationReloadKey] = useState(0);
@@ -494,6 +495,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   const [testNotificationMessageType, setTestNotificationMessageType] = useState('');
 
   const fileInputRef = useRef(null);
+  const moderationImageRequestsRef = useRef(new Set());
 
   const { photo_200, city, first_name, last_name } = fetchedUser || {};
 
@@ -837,7 +839,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
       })
       .finally(() => { if (active) setModerationLoading(false); });
     return () => { active = false; };
-  }, [activeTab, isModerator, hasSignedLaunchParams, userId, launchParams, challengeActive]);
+  }, [activeTab, isModerator, hasSignedLaunchParams, userId, launchParams, challengeActive, moderationReloadKey]);
 
   /* =====================================
      РЕГИСТРАЦИЯ
@@ -1112,24 +1114,130 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
   /* =====================================
      МОДЕРАЦИЯ
   ===================================== */
-  const handleLoadModerationImage = async submissionId => {
-    if (moderationImages[submissionId]) return;
+  /* =====================================
+    АВТОЗАГРУЗКА СКРИНШОТОВ ДЛЯ МОДЕРАЦИИ
+  ===================================== */
+  useEffect(() => {
+    if (
+      activeTab !== 'moderation' ||
+      !isModerator ||
+      !hasSignedLaunchParams ||
+      moderationSubmissions.length === 0
+    ) {
+      return;
+    }
 
-    setModerationImageLoading(previous => ({ ...previous, [submissionId]: true }));
+    const currentSignedLaunchParams = Object.fromEntries(
+      Object.entries(launchParams || {}).filter(
+        ([key, value]) =>
+          (key.startsWith('vk_') || key === 'sign') &&
+          value !== undefined && value !== null
+      )
+    );
+
+    const pendingImages = moderationSubmissions.filter(submission => (
+      submission.id &&
+      !moderationImages[submission.id] &&
+      !moderationImageRequestsRef.current.has(submission.id)
+    ));
+
+    pendingImages.forEach(submission => {
+      moderationImageRequestsRef.current.add(submission.id);
+    });
+
+    let nextImageIndex = 0;
+
+    const loadWorker = async () => {
+      while (nextImageIndex < pendingImages.length) {
+        const submission = pendingImages[nextImageIndex];
+        nextImageIndex += 1;
+
+        const submissionId = submission.id;
+
+        setModerationImageLoading(previous => ({
+          ...previous,
+          [submissionId]: true,
+        }));
+
+        try {
+          const image = await getModerationImage(
+            currentSignedLaunchParams,
+            submissionId
+          );
+
+          const dataUrl = `data:${image.mimeType};base64,${image.imageBase64}`;
+
+          setModerationImages(previous => ({
+            ...previous,
+            [submissionId]: dataUrl,
+          }));
+
+          setModerationImageErrors(previous => {
+            const next = { ...previous };
+            delete next[submissionId];
+            return next;
+          });
+
+        } catch (error) {
+          console.error(
+            'Ошибка автоматической загрузки скриншота:',
+            error
+          );
+
+          const message = formatUserError(
+            error,
+            'moderation_image_failed'
+          );
+
+          setModerationImageErrors(previous => ({
+            ...previous,
+            [submissionId]: message,
+          }));
+
+          setModerationError(message);
+
+        } finally {
+          setModerationImageLoading(previous => ({
+            ...previous,
+            [submissionId]: false,
+          }));
+        }
+      }
+    };
+
+    // Не более трёх одновременных загрузок.
+    const workerCount = Math.min(3, pendingImages.length);
+
+    const workers = Array.from(
+      { length: workerCount },
+      () => loadWorker()
+    );
+
+    Promise.all(workers).catch(error => {
+      console.error(
+        'Ошибка очереди автозагрузки скриншотов:',
+        error
+      );
+    });
+
+  }, [
+    activeTab,
+    isModerator,
+    hasSignedLaunchParams,
+    moderationSubmissions,
+    moderationImages,
+    launchParams,
+  ]);
+
+  const refreshModerationQueue = () => {
+    moderationImageRequestsRef.current.clear();
+
+    setModerationSubmissions([]);
+    setModerationImages({});
+    setModerationImageErrors({});
     setModerationError('');
 
-    try {
-      const image = await getModerationImage(signedLaunchParams, submissionId);
-      const dataUrl = `data:${image.mimeType};base64,${image.imageBase64}`;
-      setModerationImages(previous => ({ ...previous, [submissionId]: dataUrl }));
-    } catch (error) {
-      console.error('Ошибка загрузки скриншота:', error);
-      setModerationError(
-        formatUserError(error, 'moderation_image_failed')
-      );
-    } finally {
-      setModerationImageLoading(previous => ({ ...previous, [submissionId]: false }));
-    }
+    setModerationReloadKey(value => value + 1);
   };
 
   const handleModerationCommentChange = (submissionId, value) => {
@@ -1979,7 +2087,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
           <p>Сейчас нет заявок, ожидающих проверки.</p>
           <button
             type="button"
-            onClick={() => setModerationReloadKey(value => value + 1)}
+            onClick={refreshModerationQueue}
             style={{
               marginTop: '12px', padding: '10px 16px',
               border: '1px solid var(--vkui--color_separator_primary, #ddd)',
@@ -1998,7 +2106,7 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
             <strong>Ожидают проверки: {moderationSubmissions.length}</strong>
             <button
               type="button"
-              onClick={() => setModerationReloadKey(value => value + 1)}
+              onClick={refreshModerationQueue}
               style={{
                 border: 'none', background: 'transparent',
                 color: 'var(--vkui--color_text_link, #2678d8)',
@@ -2078,22 +2186,33 @@ export const Home = ({ id, fetchedUser, launchParams }) => {
                 </div>
 
                 {!image && (
-                  <button
-                    type="button"
-                    disabled={imageLoading}
-                    onClick={() => handleLoadModerationImage(submission.id)}
+                  <div
+                    role={moderationImageErrors[submission.id] ? 'alert' : 'status'}
                     style={{
-                      display: 'block', width: '100%', marginTop: '15px',
-                      padding: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '88px',
+                      marginTop: '15px',
+                      padding: '14px',
+                      boxSizing: 'border-box',
                       border: '1px solid var(--vkui--color_separator_primary, #ddd)',
                       borderRadius: '10px',
                       background: 'var(--vkui--color_background_secondary, #f3f4f5)',
-                      color: 'var(--vkui--color_text_primary, #222)',
-                      fontWeight: 600, cursor: 'pointer',
+                      color: moderationImageErrors[submission.id]
+                        ? '#b43b32'
+                        : 'var(--vkui--color_text_secondary, #777)',
+                      fontSize: '13px',
+                      lineHeight: 1.5,
+                      textAlign: 'center',
                     }}
                   >
-                    {imageLoading ? 'Загружаем изображение...' : 'Показать скриншот'}
-                  </button>
+                    {moderationImageErrors[submission.id]
+                      ? 'Не удалось автоматически загрузить скриншот. Нажми «Обновить», чтобы повторить попытку.'
+                      : imageLoading
+                        ? 'Автоматически загружаем скриншот...'
+                        : 'Скриншот автоматически загружается из хранилища...'}
+                  </div>
                 )}
 
                 {image && (
